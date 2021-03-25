@@ -26,24 +26,30 @@ class Core:
         self.agents = agents
         self.market = market
     
-    def run(self, num_simulation = 100, time_scale = 0.001):
+    def run(self, num_simulation = 100, num_of_days = 1, time_scale = 0.001):
         # time
         self.real_start_time = datetime.now()
         # in ms
         self.simulated_time = datetime.fromisoformat('2021-03-22 09:00:00.000')
         
         # start market
-        self.market.start(self, datetime.now())
+        self.market.start(self, self.simulated_time)
 
         # start agent
         for agent in self.agents:
-            agent.start(self, datetime.now())
+            agent.start(self, self.simulated_time)
 
         # start to simulate
-        total_timestep = 16200 * pow(time_scale, -1)
-        for timestep in range(total_timestep):
-            step()
-            self.simulated_time += timedelta(seconds = time_scale)
+        for day in range(num_of_days):
+            total_timestep = 16200 * pow(time_scale, -1)
+            # open market
+            self.market.open_market()
+            for timestep in range(total_timestep):
+                step()
+                self.simulated_time += timedelta(seconds = time_scale)
+
+            # close market
+            self.market.close_market()
     
     def step(self):
         # check every agent
