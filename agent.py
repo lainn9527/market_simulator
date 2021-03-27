@@ -9,6 +9,7 @@ class Agent:
         self.signature = f"agent_{self.type}_{self.unique_id}"
         self.core = None
         self.start_time = None
+        self.current_time = None
 
     def start(self, core, start_time):
         self.core = core
@@ -18,13 +19,13 @@ class Agent:
     def step(self):
         pass
 
-    def place_order(self, _type, code, bid_or_ask, volumn, price):
+    def place_order(self, _type, code, bid_or_ask, volume, price):
         # check valid
         if _type == 'limit':
-            order = LimitOrder(self.signature, code, bid_or_ask, volumn, price)
+            order = LimitOrder(self.signature, code, 'LIMIT', bid_or_ask, volume, price)
             msg = Message('MARKET', self.signature, 'limit', order)
         elif _type == 'market':
-            order = MarketOrder(self.signature, code, bid_or_ask, volumn)
+            order = MarketOrder(self.signature, code, 'MARKET', bid_or_ask, volume)
             msg = Message('MARKET', self.signature, 'market', order)
         else:
             raise Exception
@@ -32,4 +33,5 @@ class Agent:
         self.core.send_message(msg, dt.now().timestamp())
 
     def receive_message(self, message):
+        message_subject = ['ORDER_FILLED', 'ORDER_PLACED']
         pass

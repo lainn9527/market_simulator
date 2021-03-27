@@ -4,42 +4,62 @@ from dataclasses import dataclass
 from typing import Any, List, Tuple
 from core import Message
 class OrderBook:
-    def __init__(self, market, code):
+    def __init__(self, market, code, value):
         '''
-        orders:
-        {'Order ID':
+            history: [date, [orders]], past orders, sorted by day
+            daily_info:
+            [
+                (
+                    date,
+                    {
+                        'open': float,
+                        'high': float,
+                        'low': float,
+                        'close': float
+                    }
+                )
+            ]
+            orders:
             {
-             'order': Order,
-             'time': Time,
-             'state': bool,
-             'transactions': ['time', 'price', 'quantity'],
-             'modifications': [],
-             'cancellation': bool
+                'Order ID':
+                    {
+                        'order': Order,
+                        'time': Time,
+                        'state': bool,
+                        'transactions': ['time', 'price', 'quantity'],
+                        'modifications': [],
+                        'cancellation': bool
+                    }
             }
-        }
-        code: code of security
-        bids: [[price(descending), volumn, [[order_id, quantity]]]]
-        asks: [[price(ascending), volumn, [[order_id, quantity]]]
-        stats: {
-            'amount': float,
-            'volumn': int,
-            'bid': int,
-            'ask': int,
-            'average': float,
-            'high': float,
-            'low': float,
-        }
+            code: code of security
+            bids: [[price(descending), volume, [[order_id, quantity]]]]
+            asks: [[price(ascending), volume, [[order_id, quantity]]]
+            stats:
+            {
+                'amount': float,
+                'volume': int,
+                'bid': int,
+                'ask': int,
+                'average': float,
+                'high': float,
+                'low': float,
+            }
         '''
         self.market = market
-        self.orders = dict()
-        self.transactions = list()
         self.code = code
+        self.value = value
+
+        self.history = dict()
+        self.daily_info = []
+
+        self.base_price = 0
+        self.orders = dict()
         self.bids = list()
         self.asks = list()
         self.num_of_order = 0
         self.stats = {
             'amount': 0.0,
-            'volumn': 0,
+            'volume': 0,
             'bid': 0,
             'ask': 0,
             'average': 0.0,
@@ -47,7 +67,30 @@ class OrderBook:
             'low': 0,
         }
     
-    def handle_limit_order(self, order, time) -> str:
+    def set_base_price(self):
+        # base price for call auction in the open session
+        # use the close price of previous day as the base price and if it's the first day, use the fundamental value instead
+
+        if len(self.daily_info) == 0:
+            self.base_price = self.value
+        else:
+            self.base_price = self.daily_info[-1][1]['close']
+        return self.base_price
+
+
+    def handle_limit_order(self, order, time, matching) -> str:
+        '''
+            Match the limit order and fill the matched order.
+            Step:
+                1. add the limit order to the orderbook
+                2. notify the agent of order placement
+                3. match the limit order with best price and fill the matched order
+                4. after there is no match pair, fill the limit order
+                5. update the bid/ask price
+                6. update the statics of the orderbook
+            For order in auction, matching in step 3 and 4 is needless. The matching flag will control it.
+        '''
+
         order_id = self._generate_order_id()
 
         # add the order to the orderbook
@@ -59,21 +102,20 @@ class OrderBook:
             'modifications': [],
             'cancellation': False
         }
-        # send message
-        self.market.send_message(Message('MARKET', 'ORDER_PLACED', 'market', order.orderer,
-                                         {'price': order.price, 'quantity': order.quantity}),
-                                 time)
-        
 
-            
+        # send message to the orderer
+        self.market.send_message(
+            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'price': order.price,'quantity': order.quantity}),
+            time
+        )    
 
         remain_quantity = order.quantity
         transaction_amount = 0
         transaction_quantity = 0
-
             
         # match the limit order with best price
-        while remain_quantity > 0:
+        while matching and remain_quantity > 0:
+            # if there is no order, stop matching
             if order.bid_or_ask == 'BID' and len(self.asks) > 0 and order.price >= self.asks[0][0]:
                 best_pvo = self.asks[0]
             elif order.bid_or_ask == 'ASK' and len(self.bids) > 0 and order.price <= self.bids[0][0]:
@@ -81,6 +123,7 @@ class OrderBook:
             else:
                 break
             
+            # best_pvo: [price(descending), volume, [[order_id, quantity]] ]
             for matched_order_id, quantity in best_pvo[2]:
                 if remain_quantity >= quantity:
                     matched_quantity = quantity
@@ -110,10 +153,11 @@ class OrderBook:
                         best_pvo[2] = best_pvo[2][i:]
                         break
         
+        # if there is any match, fill the limit order
         if transaction_quantity > 0:
             self.fill_order(order_id, time, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
 
-        # update bid/ask if remain_quantity != 0
+        # update bid/ask if the limit order is partially filled and placed order
         if remain_quantity > 0:
             if order.bid_or_ask == 'BID':
                 for i, pvo in enumerate(self.bids):
@@ -140,8 +184,8 @@ class OrderBook:
         
         # update the stats
         self.stats['amount'] += transaction_amount
-        self.stats['volumn'] += transaction_quantity
-        self.stats['average'] = round(self.stats['amount'] / self.stats['volumn'], 2)
+        self.stats['volume'] += transaction_quantity
+        self.stats['average'] = round(self.stats['amount'] / (self.stats['volume'] + 1e-6), 2)
         self.stats['high'] = order.price if order.price > self.stats['high'] else self.stats['high']
         self.stats['low'] = order.price if order.price < self.stats['low'] else self.stats['low']
         if order.bid_or_ask == 'BID':
@@ -173,13 +217,19 @@ class OrderBook:
         return self.orders[order_id]
 
     def fill_order(self, order_id, time, price, quantity):
+        if price <= 0:
+            raise Exception("Invalid value: negative price")
+        elif quantity <= 0:
+            raise Exception("Invalid value: negative quantity")
+
         target_order = self.get_order(order_id)
         target_order.transactions.append([time, price, quantity])
 
         # send message of transactions
-        self.market.send_message(Message('MARKET','ORDER_FILLED', 'market', target_order.order.orderer,
-                                         {'price': price, 'quantity': quantity}),
-                                 time)
+        self.market.send_message(
+            Message('AGENT', 'ORDER_FILLED', 'market', target_order.order.orderer, {'price': price, 'quantity': quantity}),
+            time
+        )
 
         # check if this order is finished
         total_quantity = 0
@@ -190,11 +240,15 @@ class OrderBook:
         if total_quantity == target_order.order.quantity:
             target_order.state = 1
             # send message of finishing order
-            self.market.send_message(Message('MARKET','ORDER_FINISHED', 'market',
-                                             target_order.order.orderer,
-                                             {'price': round(total_amount/total_quantity, 2), 'quantity': total_quantity}),
-                                     time)
+            self.market.send_message(
+                Message('AGENT', 'ORDER_FINISHED', 'market', target_order.order.orderer, {'price': round(total_amount/total_quantity, 2),'quantity': total_quantity}),
+                time
+            )
 
+    def clear_orders(self):
+        date = self.market.get_time().date()
+        self.history[date] = self.orders()
+        pass
     def _generate_order_id(self):
         self.num_of_order += 1
         return f"{self.code}_{self.num_of_order:05}"

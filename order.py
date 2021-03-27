@@ -5,12 +5,18 @@ class Order:
         self.order_type = order_type
         self.bid_or_ask = bid_or_ask
         self.quantity = quantity
+        self.order_id = None
+    
+    
 
 class LimitOrder(Order):
     def __init__(self, orderer, code, order_type, bid_or_ask, quantity, price):
         super().__init__(orderer, code, order_type, bid_or_ask, quantity)
         self.price = price
-
+    
+    @classmethod
+    def from_market_order(cls, market_order, price):
+        return cls(market_order.orderer, market_order.code, 'LIMIT', market_order.bid_or_ask, market_order.quantity, price)
 
 class MarketOrder(Order):
     def __init__(self, orderer, code, order_type, bid_or_ask, quantity):
