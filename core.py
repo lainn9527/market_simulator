@@ -32,35 +32,44 @@ class Core:
         self.simulated_time = datetime.fromisoformat('2021-03-22 08:30:00.000')
         
         # register the core for the market and agents
-        self.market.start(self, self.simulated_time)
+        self.market.start(self, self.simulated_time, time_scale)
         for agent in self.agents:
-            agent.start(self, self.simulated_time)
+            agent.start(self, self.simulated_time, time_scale)
 
         # start to simulate
-        open_auction_timestep = (1800-1) * pow(time_scale, -1) # 0800-0900, final order is at 08:59:59.999
-        continuous_trading_timestep = (15900-1) * pow(time_scale, -1) # 0900-1325, final order is at 13:24:59.999
-        close_auction_timestep = (300-1) * pow(time_scale, -1) # 1325-1330, final order is at 13:29:59.999
-
+        open_auction_timestep = 1800 * pow(time_scale, -1) - 1 # 0800-0900, final order is at 08:59:59.999
+        continuous_trading_timestep = 15900 * pow(time_scale, -1) - 1 # 0900-1325, final order is at 13:24:59.999
+        close_auction_timestep = 300 * pow(time_scale, -1) - 1 # 1325-1330, final order is at 13:29:59.999
+        
         for day in range(num_of_days):
+            # use the core to control the state of market, not itself, for efficiency (probably)
             # open session at 08:30:00 and start the auction
             self.market.open_session(self.simulated_time)
+            self.market.start_auction()
             for timestep in range(open_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
             # simulated_time == 08:59:59.999
             self.market.close_auction()
+            # add a timestep
+            self.simulated_time += timedelta(seconds = time_scale)
 
             # continuous trading
+            self.market.start_continuous_trading()
             for timestep in range(continuous_trading_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
+            self.market.close_continuous_trading()
+            self.simulated_time += timedelta(seconds = time_scale)
 
             # close market
-            self.market.close_session()
+            self.market.start_auction()
             for timestep in range(close_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
             self.market.close_auction()
+            self.market.close_session()
+            self.simulated_time += timedelta(seconds = time_scale)
 
             # update the time
             self.simulated_time += timedelta(days = 1)
@@ -74,10 +83,8 @@ class Core:
         # check the message queue and execute the actions from agents on the market
         for msg in self.message_queue:
             self.handle_message(msg)
-
         
-        
-        market.step() # what to do?
+        self.market.step() # what to do?
 
 
 
@@ -86,6 +93,9 @@ class Core:
 
         # add message to queue
         self.message_queue.put(message)
+    def announce(self, message, send_time):
+        # announce to all agents immediately
+        self.handle_message(message)
 
     def market_best_bids(self, code):
         return self.market.best_bids(code)
@@ -129,7 +139,7 @@ class Message:
     
     @property
     def subject(self):
-        return ['MARKET_ORDER', 'LIMIT_ORDER', 'AUCTION_ORDER', 'CANCEL_ORDER', 'MODIFY_ORDER', 'MARKET_OPEN', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'MARKET_CLOSE', 'ORDER_CONFIRMED', 'ORDER_EXECUTED', 'ORDER_CANCELLED']
+        return ['OPEN_SESSION', 'CLOSE_SESSION', 'MARKET_ORDER', 'LIMIT_ORDER', 'AUCTION_ORDER', 'CANCEL_ORDER', 'MODIFY_ORDER', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
     
     @property
     def postcodes(self):

@@ -1,13 +1,13 @@
 from order_book import OrderBook
 from core import Message
 from order import LimitOrder, MarketOrder
-
+from datetime import time
 class Market:
     def __init__(self, security_values):
         self.orderbooks = self.build_orderbooks(security_values)
-        self.raw_orders = list()
         self.core = None
         self.start_time = None
+        self.time_scale = None
         self.current_time = None
     
     def build_orderbooks(self, security_values):
@@ -18,9 +18,10 @@ class Market:
 
         return {code: OrderBook(self, code, value) for code, value in security_values}
 
-    def start(self, core, start_time):
+    def start(self, core, start_time, time_scale):
         self.core = core
         self.start_time = start_time
+        self.time_scale = time_scale
         
     
     def get_orderbook(self, code):
@@ -48,103 +49,66 @@ class Market:
         pass
 
     def step(self):
-        pass
+        self.current_time += self.time_scale
 
-    def close_auction(self):
-        # match price of the bid and ask with max volume
-        for orderbook in self.orderbooks:
-            if len(orderbook.bids) == 0 or len(orderbook.asks) == 0:
-                print('No quote!')
-                pass
-            if orderbook.bids[0][0] < orderbook.asks[0][0]:
-                print('No match')
-                pass
-
-            best_bid = orderbook.bids[0][0]
-            match_index = -1
-            for i, pvo in enumerate(orderbook.asks):
-                if best_bid == pvo[0]:
-                    match_index = i
-                    break
-            if match_index == -1:
-                raise Exception('Liquidity Error: No successive quotes')
-
-            accum_bid = [pvo[1] for pvo in orderbook.bids]
-            accum_ask = [pvo[1] for pvo in orderbook.asks]
-            for i in range(1, accum_bid):
-                accum_bid[i] = accum_bid[i] + accum_bid[i-1]
-            for i in range(1, accum_ask):
-                accum_ask[i] = accum_ask[i] + accum_ask[i-1]
-            
-            i = 0
-            j = match_index
-            max_match_volume = 0
-            match_bid_index = -1
-            match_ask_index = -1
-            while i < len(orderbook.bids) and j > 0:
-                match = min(accum_bid[i], accum_ask[j])
-                if match > max_match_volume:
-                    max_match_volume = match
-                    match_bid_index = i
-                    match_ask_index = j
-                i += 1
-                j -= 1
-            
-            match_price = orderbook.bids[match_bid_index][0]
-            # fill the orders
-            remain_quantity = max_match_volume
-            for order_id, quantity in orderbook.bids[match_bid_index][2]:
-                orderbook.fill_order(order_id, self.get_time(), match_price, min(remain_quantity, quantity))
-                remain_quantity -= quantity
-            
-
-        
-
-
-    def open_session(self, open_time, timestep):
-        '''
-            1. set the base price for auction and notify all agents
-            2. simulate the auction from 0830 to 0900 to decide open price and volume
-            3. record the open price and notify all agents
-            4. ready for the continuous trading
-            TODO: auction
-        '''
+    def open_session(self, open_time):
         self.current_time = open_time
-
-        # set the base price of securities
-        base_prices = {}
-        for orderbook in self.orderbooks:
-            base_prices[orderbook.code] = orderbook.set_base_price()
-        
-        # send open time and base price to all agents and start the auction
-        msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', [self.current_time, base_prices])
-
-        # little trick to force the core notifying agents
-        # TODO: add function 'announce' in the core to represent the market announcement (like open market)
-        self.core.handle_message(msg)
-
+        msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', self.get_time())
+        self.announce(msg, self.get_time())
         
         
 
     def close_session(self):
         '''
             Works to be done at the end of a market day:
-            1. TODO: call auction in the close session
-            2. clear the order and notify the agents
-            3. summarize trading information today
-            4. return the information to the core to notify the agents
+            1. clear the order and notify the agents
+            2. summarize trading information today
+            3. send the daily stats to agents
         '''
-        # auction to get the close price
+
+
         daily_info = {}
         close_price = {}
         for orderbook in self.orderbooks:
             # get the daily info
-            daily_info[orderbook.code] = 0
+            daily_info[orderbook.code] = orderbook.daily_summarize()
 
+        self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info))
 
+    def start_auction(self):
+        # if open, set the base price for auction and notify all agents
+        if self.get_time().time() == time(hour = 8, minute = 30, second = 0):
+            base_prices = {}
+            for orderbook in self.orderbooks:
+                base_prices[orderbook.code] = orderbook.set_base_price()
+            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', base_prices)
+        elif self.get_time().time() == time(hour = 13, minute = 25, second = 0):
+            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', None)
+        # send open time and base price to all agents and start the auction
+        self.announce(msg, self.get_time())
+
+    def close_auction(self):
+        self.step()
+        price = {}
+        for orderbook in self.orderbooks:
+            price[orderbook.code] = orderbook.handle_auction()
+        msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', price)
+        self.announce(msg, self.get_time())
+
+    def start_continuous_trading(self):
+        msg = Message('ALL_AGENTS', 'OPEN_CONTINUOUS_TRADING', 'market', 'agents', None)
+        self.announce(msg, self.get_time())
+
+    def close_continuous_trading(self):
+        self.step()
+        msg = Message('ALL_AGENTS', 'STOP_CONTINUOUS_TRADING', 'market', 'agents', None)
+        self.announce(msg, self.get_time())
             
     def send_message(self, message, send_time):
         self.core.send_message(message, send_time)
+
+    def announce(self, message, send_time):
+        self.core.announce(message, send_time)
 
     def receive_message(self, message):
         if message.receiver != 'market':
