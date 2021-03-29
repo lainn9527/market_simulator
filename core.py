@@ -127,6 +127,11 @@ class Core:
     def check_agent(self, agent):
         pass
 
+    def best_bids(self, code, number):
+        return self.market.best_bids(code, number)
+    def best_asks(self, code, number):
+        return self.market.best_asks(code, number)
+
 
 
 class Message:

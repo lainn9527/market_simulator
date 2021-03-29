@@ -32,11 +32,15 @@ class Market:
     def get_time(self):
         return self.current_time
 
-    def best_asks(self, code):
-        pass
+    def best_asks(self, code, number):
+        if len(self.get_orderbook(code).asks) < number:
+            number = len(self.get_orderbook(code).asks)
+        return [self.get_time(), [ [item[0], item[1]] for item in self.get_orderbook(code).asks[:number] ]]
     
-    def best_bids(self, code):
-        pass
+    def best_bids(self, code, number):
+        if len(self.get_orderbook(code).bids) < number:
+            number = len(self.get_orderbook(code).bids)
+        return [self.get_time(), [ [item[0], item[1]] for item in self.get_orderbook(code).bids[:number] ]]
     
     def inside_asks(self, code, price):
         ob = get_orderbook(code)

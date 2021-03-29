@@ -194,7 +194,7 @@ class OrderBook:
 
         # send message to the orderer
         self.market.send_message(
-            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'price': order.price, 'quantity': order.quantity}),
+            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'time': time, 'code': order.code, 'price': order.price, 'quantity': order.quantity}),
             time
         )    
 
@@ -341,7 +341,7 @@ class OrderBook:
 
         # send message of transactions
         self.market.send_message(
-            Message('AGENT', 'ORDER_FILLED', 'market', target_order.order.orderer, {'price': price, 'quantity': quantity}),
+            Message('AGENT', 'ORDER_FILLED', 'market', target_order.order.orderer, {'code': target_order.code, 'price': price, 'quantity': quantity}),
             time
         )
 

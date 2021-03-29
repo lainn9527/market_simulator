@@ -3,15 +3,26 @@ from order import LimitOrder, MarketOrder
 from datetime import datetime as dt
 
 class Agent:
-    def __init__(self, _type, _id):
+    def __init__(self, _type, _id, start_cash):
         self.unique_id = _id
         self.type = _type
+        self.start_cash = start_cash
         self.signature = f"agent_{self.type}_{self.unique_id}"
         self.core = None
         self.start_time = None
         self.time_scale = None
         self.current_time = None
 
+        # information of markets
+        self.orders = None # {'code': [{'order': order, 'placed_time': datetime, 'finished_time': datetime,  'filled_quantity': int, 'filled_amount': float}] }
+        self.holdings = {'CASH': start_cash}
+
+        # state flag
+        self.is_trading = False
+        self.is_open_auction = False
+        self.is_close_auction = False
+        self.is_continuous_trading = False
+    
     def start(self, core, start_time, time_scale):
         self.core = core
         self.start_time = start_time
@@ -34,32 +45,72 @@ class Agent:
             msg = Message('MARKET', 'AUCTION_ORDER', self.signature, 'market', order)
         else:
             raise Exception
+        
+        self.orders['code'].append({'order': order, 'placed_time': None, 'finished_time': None, 'filled_quantity': 0, 'filled_amount': 0.0})
         self.core.send_message(msg, self.current_time())
 
+    def handle_filled(self, order):
+        order.code
     def receive_message(self, message):
         if message.receiver != self.signature:
             raise Exception('Wrong receiver!')
 
         message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
+
         if message.subject == 'OPEN_SESSION':
+            # receive time and ready to palce order
+            self.current_time = message.content
             pass
+
         elif message.subject == 'CLOSE_SESSION':
+            # receive the daily info of market: daily_info[code] = {'date': date in isoformat, 'order': self.orders, 'bid': self.bids, 'ask': self.asks, 'stats': self.stats }
             pass
+
         elif message.subject == 'OPEN_AUCTION':
-            pass
+            # receive base prices when open, nothing when close
+            self.is_trading = True
+            if message.content == None:
+                self.is_close_auction = True
+            else:
+                self.is_open_auction = True
+            
+
         elif message.subject == 'CLOSE_AUCTION':
+            # receive open price when open, close price when close
+            # timestep++
+            if 'open' in message.content.keys():
+                self.is_open_auction = False
+            elif 'close' in message.content.keys():
+                self.is_trading = False
+                self.is_close_auction = False
             pass
+
         elif message.subject == 'OPEN_CONTINUOUS_TRADING':
-            pass
+            self.is_continuous_trading = True
+            # ready to place order in continuous trading (09:00:00)
+
         elif message.subject == 'STOP_CONTINUOUS_TRADING':
-            pass
+            self.is_continuous_trading = False
+            # stop placing order in continuous trading (13:24:59.999)
+
         elif message.subject == 'ORDER_PLACED':
-            pass
+            # receive order info = {'order_id': order_id, 'code': order.code, 'price': order.price, 'quantity': order.quantity}
+            # check if the order is transformed from market order
+            if isinstance(message.content, MarketOrder):
+                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.last_orders['code'], message.content.price)
+            self.orders['code']['placed_time'] = message.content['time']
+
+
         elif message.subject == 'ORDER_FILLED':
+            # receive the transactions (partial filled) of the order = {'price': price, 'quantity': quantity}
             pass
+
         elif message.subject == 'ORDER_FINISHED':
+            # receive the finisged order info = {'price': round(total_amount/total_quantity, 2),'quantity': total_quantity}
             pass
+
         else:
             raise Exception(f"Invalid subject for agent {self.signature}")
 
-
+    def current_price(self, bid_or_ask, code, number):
+        return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
