@@ -34,18 +34,18 @@ class Core:
         # register the core for the market and agents
         self.market.start(self, self.simulated_time, time_scale)
         for agent in self.agents:
-            agent.start(self, self.simulated_time, time_scale)
+            agent.start(self, self.simulated_time, time_scale, self.market.get_securities())
 
         # start to simulate
         open_auction_timestep = 1800 * pow(time_scale, -1) - 1 # 0800-0900, final order is at 08:59:59.999
         continuous_trading_timestep = 15900 * pow(time_scale, -1) - 1 # 0900-1325, final order is at 13:24:59.999
         close_auction_timestep = 300 * pow(time_scale, -1) - 1 # 1325-1330, final order is at 13:29:59.999
-        
+        total_timestep = open_auction_timestep + continuous_trading_timestep + close_auction_timestep
         for day in range(num_of_days):
             # use the core to control the state of market, not itself, for efficiency (probably)
             # open session at 08:30:00 and start the auction
-            self.market.open_session(self.simulated_time)
-            self.market.start_auction()
+            self.market.open_session(self.simulated_time, total_timestep)
+            self.market.start_auction(open_auction_timestep)
             for timestep in range(open_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
@@ -55,7 +55,7 @@ class Core:
             self.simulated_time += timedelta(seconds = time_scale)
 
             # continuous trading
-            self.market.start_continuous_trading()
+            self.market.start_continuous_trading(continuous_trading_timestep)
             for timestep in range(continuous_trading_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
@@ -63,7 +63,7 @@ class Core:
             self.simulated_time += timedelta(seconds = time_scale)
 
             # close market
-            self.market.start_auction()
+            self.market.start_auction(close_auction_timestep)
             for timestep in range(close_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
@@ -97,12 +97,6 @@ class Core:
         # announce to all agents immediately
         self.handle_message(message)
 
-    def market_best_bids(self, code):
-        return self.market.best_bids(code)
-    
-    def market_best_asks(self, code):
-        return self.market.best_asks(code)
-
     def handle_message(self, message):
         if message.postcode == 'MARKET':
             if message.receiver == 'market':
@@ -129,6 +123,7 @@ class Core:
 
     def best_bids(self, code, number):
         return self.market.best_bids(code, number)
+
     def best_asks(self, code, number):
         return self.market.best_asks(code, number)
 

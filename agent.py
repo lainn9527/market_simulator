@@ -1,12 +1,13 @@
 from core import Core, Message
 from order import LimitOrder, MarketOrder
-from datetime import datetime as dt
+from datetime import datetime, timedelta
 
 class Agent:
-    def __init__(self, _type, _id, start_cash):
+    def __init__(self, _type, _id, start_cash = 10000000, security_unit = 1000):
         self.unique_id = _id
         self.type = _type
         self.start_cash = start_cash
+        self.security_unit = security_unit
         self.signature = f"agent_{self.type}_{self.unique_id}"
         self.core = None
         self.start_time = None
@@ -22,17 +23,21 @@ class Agent:
         self.is_open_auction = False
         self.is_close_auction = False
         self.is_continuous_trading = False
+        self.total_timestep = None
+        self.period_timestep = None
     
-    def start(self, core, start_time, time_scale):
+    def start(self, core, start_time, time_scale, securities):
         self.core = core
         self.start_time = start_time
         self.time_scale = time_scale
+        self.order.update({code: [] for code in securities})
+        self.holdings.update({code: 0 for code in securities})
         # ready to go
 
     def step(self):
         self.current_time += 1
 
-    def place_order(self, _type, code, bid_or_ask, volume, price):
+    def place_order(self, _type, code, bid_or_ask, volume, price = 0):
         # check valid
         if _type == 'limit':
             order = LimitOrder(self.signature, code, 'LIMIT', bid_or_ask, volume, price)
@@ -44,7 +49,10 @@ class Agent:
             order = LimitOrder(self.signature, code, 'LIMIT', bid_or_ask, volume, price)
             msg = Message('MARKET', 'AUCTION_ORDER', self.signature, 'market', order)
         else:
-            raise Exception
+            raise Exception("Invalid order type")
+        
+        if volume * price > self.holdings['CASH']:
+            raise Exception("Not enough money")
         
         self.orders['code'].append({'order': order, 'placed_time': None, 'finished_time': None, 'filled_quantity': 0, 'filled_amount': 0.0})
         self.core.send_message(msg, self.current_time())
@@ -57,20 +65,26 @@ class Agent:
 
         if message.subject == 'OPEN_SESSION':
             # receive time and ready to palce order
-            self.current_time = message.content
+            self.current_time = message.content['time']
+            self.total_timestep = message.content['total_timestep']
+            self.handle_open()
+
 
         elif message.subject == 'CLOSE_SESSION':
             # receive the daily info of market: daily_info[code] = {'date': date in isoformat, 'order': self.orders, 'bid': self.bids, 'ask': self.asks, 'stats': self.stats }
-            pass
+            self.handle_close()
 
         elif message.subject == 'OPEN_AUCTION':
             # receive base prices when open, nothing when close
             self.is_trading = True
-            if message.content == None:
+            if 'base_prices' not in message.content.keys():
                 self.is_close_auction = True
+                self.period_timestep = message.content['timestep']
             else:
                 self.is_open_auction = True
+                self.period_timestep = message.content['timestep']
             
+            self.schedule_auction()
 
         elif message.subject == 'CLOSE_AUCTION':
             # receive open price when open, close price when close
@@ -83,25 +97,32 @@ class Agent:
 
             # stop placing order in 08:59:59.999 or 13:29:29.999
             # steps by hand
+            self.period_timesteps = None
             self.current_time += 1
 
         elif message.subject == 'OPEN_CONTINUOUS_TRADING':
             self.is_continuous_trading = True
+            self.period_timesteps = message.content['timestep']
             # ready to place order in continuous trading (09:00:00)
+            self.schedule_continuous_trading()
 
         elif message.subject == 'STOP_CONTINUOUS_TRADING':
             self.is_continuous_trading = False
-
             # stop placing order in continuous trading (13:24:59.999)
             # steps to 13:25:00 by hand
+            self.period_timesteps = None
             self.current_time += 1
 
         elif message.subject == 'ORDER_PLACED':
             # receive order info = {'order_id': order_id, 'code': order.code, 'price': order.price, 'quantity': order.quantity}
             # check if the order is transformed from market order
             if isinstance(message.content, MarketOrder):
-                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.last_orders['code'], message.content['price'])
+                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.orders['code'][-1]['order'], message.content['price'])
+
             self.orders['code']['placed_time'] = message.content['time']
+            self.holdings['CASH'] -= message.content['price'] * message.content['quantity']
+            if self.holdings['CASH'] < 0:
+                raise Exception("Agent has negative cash value.")
 
             self.log_event('ORDER_PLACED', self.orders['code'][-1])
 
@@ -110,7 +131,8 @@ class Agent:
             # receive the transactions (partial filled) of the order = {'code': code, 'price': price, 'quantity': quantity}
             self.orders[message.content['code']][-1]['filled_quantity'] += message.content['quantity']
             self.orders[message.content['code']][-1]['filled_amount'] += message.content['price'] * message.content['quantity']
-            
+            self.holdings['code'] += message.content['quantity']
+
             self.log_event('ORDER_FILLED', {'price': message.content['price'], 'quantity': message.content['quantity']})
 
 
@@ -130,3 +152,17 @@ class Agent:
 
     def log_event(self, event_type, event):
         print("Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
+    
+    def timestep_to_time(self, timestep):
+        return timedelta(seconds = self.time_scale * timestep)
+        
+    def handle_open(self):
+        pass
+
+    def schedule_auction(self):
+        pass
+    
+    def schedule_continuous_trading(self):
+        pass
+    def handle_close(self):
+        pass

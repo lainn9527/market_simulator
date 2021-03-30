@@ -55,9 +55,9 @@ class Market:
     def step(self):
         self.current_time += self.time_scale
 
-    def open_session(self, open_time):
+    def open_session(self, open_time, total_timestep):
         self.current_time = open_time
-        msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', self.get_time())
+        msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', {'time': self.get_time(), 'total_timestep': total_timestep})
         self.announce(msg, self.get_time())
         
         
@@ -79,15 +79,16 @@ class Market:
 
         self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info))
 
-    def start_auction(self):
+    def start_auction(self, timestep):
         # if open, set the base price for auction and notify all agents
         if self.get_time().time() == time(hour = 8, minute = 30, second = 0):
             base_prices = {}
             for orderbook in self.orderbooks:
                 base_prices[orderbook.code] = orderbook.set_base_price()
-            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', base_prices)
+            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'base_prices': base_prices, 'timestep': timestep})
+
         elif self.get_time().time() == time(hour = 13, minute = 25, second = 0):
-            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', None)
+            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'timestep': timestep})
         # send open time and base price to all agents and start the auction
         self.announce(msg, self.get_time())
 
@@ -99,8 +100,8 @@ class Market:
         msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', price)
         self.announce(msg, self.get_time())
 
-    def start_continuous_trading(self):
-        msg = Message('ALL_AGENTS', 'OPEN_CONTINUOUS_TRADING', 'market', 'agents', None)
+    def start_continuous_trading(self, timestep):
+        msg = Message('ALL_AGENTS', 'OPEN_CONTINUOUS_TRADING', 'market', 'agents', {'timestep': timestep})
         self.announce(msg, self.get_time())
 
     def close_continuous_trading(self):
@@ -149,3 +150,6 @@ class Market:
 
     def modify_order(self, order):
         pass
+
+    def get_securities(self):
+        return list(self.orderbooks.keys())
