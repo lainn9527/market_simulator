@@ -347,15 +347,13 @@ class OrderBook:
 
         # check if this order is finished
         total_quantity = 0
-        total_amount = 0
         for item in target_order.transactions:
             total_quantity += item[2]
-            total_amount += item[1] * item[2]
         if total_quantity == target_order.order.quantity:
             target_order.state = 1
             # send message of finishing order
             self.market.send_message(
-                Message('AGENT', 'ORDER_FINISHED', 'market', target_order.order.orderer, {'price': round(total_amount/total_quantity, 2),'quantity': total_quantity}),
+                Message('AGENT', 'ORDER_FINISHED', 'market', target_order.order.orderer, {'code': target_order.code, 'time': time}),
                 time
             )
 

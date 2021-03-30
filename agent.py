@@ -30,7 +30,7 @@ class Agent:
         # ready to go
 
     def step(self):
-        pass
+        self.current_time += 1
 
     def place_order(self, _type, code, bid_or_ask, volume, price):
         # check valid
@@ -49,8 +49,6 @@ class Agent:
         self.orders['code'].append({'order': order, 'placed_time': None, 'finished_time': None, 'filled_quantity': 0, 'filled_amount': 0.0})
         self.core.send_message(msg, self.current_time())
 
-    def handle_filled(self, order):
-        order.code
     def receive_message(self, message):
         if message.receiver != self.signature:
             raise Exception('Wrong receiver!')
@@ -60,7 +58,6 @@ class Agent:
         if message.subject == 'OPEN_SESSION':
             # receive time and ready to palce order
             self.current_time = message.content
-            pass
 
         elif message.subject == 'CLOSE_SESSION':
             # receive the daily info of market: daily_info[code] = {'date': date in isoformat, 'order': self.orders, 'bid': self.bids, 'ask': self.asks, 'stats': self.stats }
@@ -83,7 +80,10 @@ class Agent:
             elif 'close' in message.content.keys():
                 self.is_trading = False
                 self.is_close_auction = False
-            pass
+
+            # stop placing order in 08:59:59.999 or 13:29:29.999
+            # steps by hand
+            self.current_time += 1
 
         elif message.subject == 'OPEN_CONTINUOUS_TRADING':
             self.is_continuous_trading = True
@@ -91,26 +91,42 @@ class Agent:
 
         elif message.subject == 'STOP_CONTINUOUS_TRADING':
             self.is_continuous_trading = False
+
             # stop placing order in continuous trading (13:24:59.999)
+            # steps to 13:25:00 by hand
+            self.current_time += 1
 
         elif message.subject == 'ORDER_PLACED':
             # receive order info = {'order_id': order_id, 'code': order.code, 'price': order.price, 'quantity': order.quantity}
             # check if the order is transformed from market order
             if isinstance(message.content, MarketOrder):
-                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.last_orders['code'], message.content.price)
+                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.last_orders['code'], message.content['price'])
             self.orders['code']['placed_time'] = message.content['time']
+
+            self.log_event('ORDER_PLACED', self.orders['code'][-1])
 
 
         elif message.subject == 'ORDER_FILLED':
-            # receive the transactions (partial filled) of the order = {'price': price, 'quantity': quantity}
-            pass
+            # receive the transactions (partial filled) of the order = {'code': code, 'price': price, 'quantity': quantity}
+            self.orders[message.content['code']][-1]['filled_quantity'] += message.content['quantity']
+            self.orders[message.content['code']][-1]['filled_amount'] += message.content['price'] * message.content['quantity']
+            
+            self.log_event('ORDER_FILLED', {'price': message.content['price'], 'quantity': message.content['quantity']})
+
 
         elif message.subject == 'ORDER_FINISHED':
             # receive the finisged order info = {'price': round(total_amount/total_quantity, 2),'quantity': total_quantity}
-            pass
+            if self.orders[message.content['code']][-1]['order'].quantity != self.orders[message.content['code']][-1]['filled_quantity']:
+                raise Exception("The quantity hasn't fulfilled")
+            self.orders[message.content['code']][-1]['finished_time'] = message.content['time']
 
+            self.log_event('ORDER_FINISHED', self.orders[message.content['code']][-1])
+            
         else:
             raise Exception(f"Invalid subject for agent {self.signature}")
 
     def current_price(self, bid_or_ask, code, number):
         return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
+
+    def log_event(self, event_type, event):
+        print("Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
