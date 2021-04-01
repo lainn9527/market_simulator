@@ -1,21 +1,25 @@
-from core import Core, Message
+from message import Message
 from order import LimitOrder, MarketOrder
 from datetime import datetime, timedelta
 
 class Agent:
-    def __init__(self, _type, _id, start_cash = 10000000, security_unit = 1000):
-        self.unique_id = _id
+    num_of_agent = 0
+
+    def __init__(self, _type, _id = None, start_cash = 10000000, security_unit = 1000):
+        Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
         self.security_unit = security_unit
-        self.signature = f"agent_{self.type}_{self.unique_id}"
+        self.signature = f"agent_{self.type}_{self.get_counter()}" if _id == None else _id
+        self.unique_id = None
+        self.signature = None
         self.core = None
         self.start_time = None
         self.time_scale = None
         self.current_time = None
 
         # information of markets
-        self.orders = None # {'code': [{'order': order, 'placed_time': datetime, 'finished_time': datetime,  'filled_quantity': int, 'filled_amount': float}] }
+        self.orders = {} # {'code': [{'order': order, 'placed_time': datetime, 'finished_time': datetime,  'filled_quantity': int, 'filled_amount': float}] }
         self.holdings = {'CASH': start_cash}
 
         # state flag
@@ -30,13 +34,14 @@ class Agent:
         self.core = core
         self.start_time = start_time
         self.time_scale = time_scale
-        self.order.update({code: [] for code in securities})
+        self.orders.update({code: [] for code in securities})
         self.holdings.update({code: 0 for code in securities})
         # ready to go
 
     def step(self):
-        self.current_time += 1
+        self.current_time += timedelta(seconds = self.time_scale)
 
+    
     def place_order(self, _type, code, bid_or_ask, volume, price = 0):
         # check valid
         if _type == 'limit':
@@ -58,7 +63,7 @@ class Agent:
         self.core.send_message(msg, self.current_time())
 
     def receive_message(self, message):
-        if message.receiver != self.signature:
+        if message.receiver != self.signature and message.receiver != 'agents':
             raise Exception('Wrong receiver!')
 
         message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
@@ -77,7 +82,7 @@ class Agent:
         elif message.subject == 'OPEN_AUCTION':
             # receive base prices when open, nothing when close
             self.is_trading = True
-            if 'base_prices' not in message.content.keys():
+            if 'price_info' not in message.content.keys():
                 self.is_close_auction = True
                 self.period_timestep = message.content['timestep']
             else:
@@ -155,6 +160,18 @@ class Agent:
     
     def timestep_to_time(self, timestep):
         return timedelta(seconds = self.time_scale * timestep)
+
+    @classmethod
+    def add_counter(cls):
+        cls.num_of_agent += 1
+
+    @classmethod
+    def get_counter(cls):
+        return cls.num_of_agent
+    
+    
+    def generate_id(self):
+        pass
         
     def handle_open(self):
         pass

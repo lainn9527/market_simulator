@@ -1,10 +1,10 @@
 from order_book import OrderBook
-from core import Message
+from message import Message
 from order import LimitOrder, MarketOrder
-from datetime import time
+from datetime import time, timedelta
 class Market:
     def __init__(self, security_values):
-        self.orderbooks = self.build_orderbooks(security_values)
+        self.orderbooks = {code: OrderBook(self, code, value) for code, value in security_values.items()}
         self.core = None
         self.start_time = None
         self.time_scale = None
@@ -16,7 +16,8 @@ class Market:
         
         # initiate prices of securities
 
-        return {code: OrderBook(self, code, value) for code, value in security_values}
+        return {code: OrderBook(self, code, value) for code, value in security_values.items()}
+
 
     def start(self, core, start_time, time_scale):
         self.core = core
@@ -27,7 +28,7 @@ class Market:
     def get_orderbook(self, code):
         if code not in self.orderbooks.keys():
             raise Exception
-        return self.orderbooks['code']
+        return self.orderbooks[code]
 
     def get_time(self):
         return self.current_time
@@ -53,10 +54,19 @@ class Market:
         pass
 
     def step(self):
-        self.current_time += self.time_scale
+        self.current_time += timedelta(seconds = self.time_scale)
 
     def open_session(self, open_time, total_timestep):
         self.current_time = open_time
+        # determine the price list of orderbook
+        for code, orderbook in self.orderbooks.items():
+            orderbook.set_price_list()
+
+        # provide liquidity
+
+        
+
+        # notify agents
         msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', {'time': self.get_time(), 'total_timestep': total_timestep})
         self.announce(msg, self.get_time())
         
@@ -73,19 +83,21 @@ class Market:
 
         daily_info = {}
         close_price = {}
-        for orderbook in self.orderbooks:
+        for code, orderbook in self.orderbooks.items():
             # get the daily info
-            daily_info[orderbook.code] = orderbook.daily_summarize()
+            daily_info[code] = orderbook.daily_summarize()
 
         self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info))
 
     def start_auction(self, timestep):
-        # if open, set the base price for auction and notify all agents
+        # if open, set the base price for auction and notify all agents the price information
         if self.get_time().time() == time(hour = 8, minute = 30, second = 0):
-            base_prices = {}
-            for orderbook in self.orderbooks:
-                base_prices[orderbook.code] = orderbook.set_base_price()
-            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'base_prices': base_prices, 'timestep': timestep})
+            price_info = {}
+            for code, orderbook in self.orderbooks.items():
+                base_price = orderbook.set_base_price()
+                base_prices[code] = orderbook.set_base_price()
+                price_info[code] = {'base_price': base_price, 'tick_size': self.determine_tick_size(base_price)}
+            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'price_info': price_info, 'timestep': timestep})
 
         elif self.get_time().time() == time(hour = 13, minute = 25, second = 0):
             msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'timestep': timestep})
@@ -95,8 +107,8 @@ class Market:
     def close_auction(self):
         self.step()
         price = {}
-        for orderbook in self.orderbooks:
-            price[orderbook.code] = orderbook.handle_auction()
+        for code, orderbook in self.orderbooks.items():
+            price[code] = orderbook.handle_auction()
         msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', price)
         self.announce(msg, self.get_time())
 
@@ -153,3 +165,20 @@ class Market:
 
     def get_securities(self):
         return list(self.orderbooks.keys())
+
+    def get_price_info(self):
+        pass
+
+    def determine_tick_size(self):
+        if self.value < 10:
+            return 0.01
+        elif self.value < 50:
+            return 0.05
+        elif self.value < 100:
+            return 0.1
+        elif self.value < 500:
+            return 0.5
+        elif self.value < 1000:
+            return 1
+        else:
+            return 5

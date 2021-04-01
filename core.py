@@ -1,8 +1,8 @@
+import agent
+import market
 from datetime import datetime, timedelta
 from queue import Queue
 from order import LimitOrder, MarketOrder
-from agent import Agent
-from market import Market
 class Core:
     '''
         Serve as platform to contain the market and agents.
@@ -14,8 +14,8 @@ class Core:
     '''
     def __init__(
         self,
-        market: Market,
-        agents: [agent]
+        market: market.Market,
+        agents: [agent.Agent]
     ) -> None:
     
         # initialize all things
@@ -37,9 +37,9 @@ class Core:
             agent.start(self, self.simulated_time, time_scale, self.market.get_securities())
 
         # start to simulate
-        open_auction_timestep = 1800 * pow(time_scale, -1) - 1 # 0800-0900, final order is at 08:59:59.999
-        continuous_trading_timestep = 15900 * pow(time_scale, -1) - 1 # 0900-1325, final order is at 13:24:59.999
-        close_auction_timestep = 300 * pow(time_scale, -1) - 1 # 1325-1330, final order is at 13:29:59.999
+        open_auction_timestep = int(1800 * pow(time_scale, -1) - 1) # 0800-0900, final order is at 08:59:59.999
+        continuous_trading_timestep = int(15900 * pow(time_scale, -1) - 1) # 0900-1325, final order is at 13:24:59.999
+        close_auction_timestep = int(300 * pow(time_scale, -1) - 1) # 1325-1330, final order is at 13:29:59.999
         total_timestep = open_auction_timestep + continuous_trading_timestep + close_auction_timestep
         for day in range(num_of_days):
             # use the core to control the state of market, not itself, for efficiency (probably)
@@ -81,8 +81,8 @@ class Core:
             agent.step()
 
         # check the message queue and execute the actions from agents on the market
-        for msg in self.message_queue:
-            self.handle_message(msg)
+        while not self.message_queue.empty():
+            self.handle_message(self.message_queue.get())
         
         self.market.step() # what to do?
 
@@ -93,6 +93,7 @@ class Core:
 
         # add message to queue
         self.message_queue.put(message)
+
     def announce(self, message, send_time):
         # announce to all agents immediately
         self.handle_message(message)
@@ -126,22 +127,4 @@ class Core:
 
     def best_asks(self, code, number):
         return self.market.best_asks(code, number)
-
-
-
-class Message:
-    def __init__(self, postcode, subject, sender, receiver, content):
-        self.postcode = postcode
-        self.subject = subject
-        self.sender = sender
-        self.receiver = receiver
-        self.content = content
-    
-    @property
-    def subject(self):
-        return ['OPEN_SESSION', 'CLOSE_SESSION', 'MARKET_ORDER', 'LIMIT_ORDER', 'AUCTION_ORDER', 'CANCEL_ORDER', 'MODIFY_ORDER', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
-    
-    @property
-    def postcodes(self):
-        return ['ALL_AGENTS', 'AGENT', 'MARKET']
 

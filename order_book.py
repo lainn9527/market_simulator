@@ -1,9 +1,11 @@
 import pandas as pd
 import datetime
+import math
 from order import LimitOrder, MarketOrder
 from dataclasses import dataclass
 from typing import Any, List, Tuple
-from core import Message
+from message import Message
+
 class OrderBook:
     def __init__(self, market, code, value):
         '''
@@ -28,8 +30,8 @@ class OrderBook:
             bids: [[price(descending), volume, [[order_id, quantity]]]]
             asks: [[price(ascending), volume, [[order_id, quantity]]]
             stats: {
-                'value: float
                 'base': float,
+                'value: float
                 'amount': float,
                 'volume': int,
                 'bid': int,
@@ -49,9 +51,12 @@ class OrderBook:
         self.orders = None
         self.bids = None
         self.asks = None
+        self.best_bid_index = None
+        self.best_ask_index = None
         self.num_of_order = None
         self.stats = None
         self.reset()
+
 
     def reset(self):
         self.orders = dict()
@@ -59,6 +64,9 @@ class OrderBook:
         self.asks = list()
         self.num_of_order = 0
         self.stats = {
+            'up_limit': 0.0,
+            'low_limit': 0.0,
+            'tick_size': 0.0,
             'base': 0.0,
             'value': 0.0,
             'amount': 0.0,
@@ -83,6 +91,34 @@ class OrderBook:
         
         return self.stats['base']
 
+    def set_price_list(self):
+        # base price for call auction in the open session
+        # use the close price of previous day as the base price and if it's the first day, use the fundamental value instead
+
+        if len(self.history) == 0:
+            base_price = self.value
+        else:
+            base_price = self.history[-1]['stats']['close']
+
+        # initalize the valid price list
+        tick_size = self.determine_tick_size(base_price)
+        valid_ticks = math.floor((base_price * 0.1) / tick_size)
+        valid_price = [round(base_price + tick_size * i, 2) for i in range(-1 * valid_ticks, valid_ticks + 1, 1)]
+        low_limit = valid_price[0]
+        up_limit = valid_price[-1]
+        self.bids = [valid_price.copy(), [0]*len(valid_price), []]
+        self.asks = [valid_price.copy(), [0]*len(valid_price), []]
+
+        # point to the base price
+        self.best_bid_index = self.best_ask_index = valid_ticks        
+
+
+        self.stats['base'] = base_price
+        self.stats['up_limit'] = up_limit
+        self.stats['low_limit'] = low_limit
+        self.stats['tick_size'] = tick_size
+
+    
     def handle_auction(self):
         time = self.market.get_time()
         # match price of the bid and ask with max volume
@@ -201,75 +237,24 @@ class OrderBook:
         remain_quantity = order.quantity
         transaction_amount = 0
         transaction_quantity = 0
-            
-        # match the limit order with best price
-        while matching and remain_quantity > 0:
-            # if there is no order, stop matching
-            if order.bid_or_ask == 'BID' and len(self.asks) > 0 and order.price >= self.asks[0][0]:
-                best_pvo = self.asks[0]
-            elif order.bid_or_ask == 'ASK' and len(self.bids) > 0 and order.price <= self.bids[0][0]:
-                best_pvo = self.bids[0]
-            else:
-                break
-            
-            # best_pvo: [price(descending), volume, [[order_id, quantity]] ]
-            for matched_order_id, quantity in best_pvo[2]:
-                if remain_quantity >= quantity:
-                    matched_quantity = quantity
-                elif remain_quantity < quantity:
-                    matched_quantity = remain_quantity
 
-                self.fill_order(matched_order_id, time, best_pvo[0], matched_quantity)
-                transaction_quantity += matched_quantity
-                quantity -= matched_quantity      
-                best_pvo[1] -= matched_quantity
-                remain_quantity -= matched_quantity
-                
-                if remain_quantity == 0:
-                    break
+        # insert the order if order price is within best price or outside the price
+        # else start matching
+        if order.bid_or_ask == 'BID' and (order.price <= self.bids[self.best_bid_index] or order.price < self.asks[self.best_ask_index]):
+            self.add_order(order_id, order.bid_or_ask, order.price, order.quantity)
+        elif order.bid_or_ask == 'ASK' and (order.price >= self.asks[self.best_ask_index] or order.price > self.bids[self.best_bid_index]):
+            self.add_order(order_id, order.bid_or_ask, order.price, order.quantity)
+        else:
+            # start matching
+            transaction_quantity, transaction_amount = self.match_order(order.bid_or_ask, order.price, order.quantity)
             
-            transaction_amount += transaction_quantity * best_pvo[0]
-            # check if best bid/ask needs to be updated
-            if best_pvo[1] == 0:
-                if order.bid_or_ask == 'BID':
-                    self.asks.pop(0)
-                elif order.bid_or_ask == 'ASK':
-                    self.bids.pop(0)
-            else:
-                # remove order with zero quantity (since remove item when iterating list may cause index error, we don't remove the order in the previous for-loop)
-                for i, n in enumerate(best_pvo[2]):
-                    if n[1] != 0:
-                        best_pvo[2] = best_pvo[2][i:]
-                        break
-        
-        # if there is any match, fill the limit order
-        if transaction_quantity > 0:
-            self.fill_order(order_id, time, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
+            # if there is any match, fill the limit order
+            if transaction_quantity > 0:
+                self.fill_order(order_id, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
 
-        # update bid/ask if the limit order is partially filled and placed order
-        if remain_quantity > 0:
-            if order.bid_or_ask == 'BID':
-                for i, pvo in enumerate(self.bids):
-                    if order.prive > pvo[0]:
-                        self.bids.insert(i, [order.price, remain_quantity, [order_id, remain_quantity]])
-                        break
-                    elif order.price == pvo[0]:
-                        pvo[1] += remain_quantity
-                        pvo[2].append([order.price, remain_quantity, [order_id, remain_quantity]])
-                        break
-                    if i == len(self.bids) - 1:
-                        self.bids.append([order.price, remain_quantity, [order_id, remain_quantity]])
-            elif order.bid_or_ask == 'ASK':
-                for i, pvo in enumerate(self.asks):
-                    if order.prive < pvo[0]:
-                        self.asks.insert(i, [order.price, remain_quantity, [order_id, remain_quantity]])
-                        break
-                    elif order.price == pvo[0]:
-                        pvo[1] += remain_quantity
-                        pvo[2].append([order.price, remain_quantity, [order_id, remain_quantity]])
-                        break
-                    if i == len(self.asks) - 1:
-                        self.asks.append([order.price, remain_quantity, [order_id, remain_quantity]])
+            # update bid/ask if the limit order is partially filled and placed order
+            if transaction_quantity != order.quantity:
+                self.add_order(order_id, order.bid_or_ask, order.price, order.quantity - transaction_quantity)
         
         # update the stats
         updated_info = {
@@ -278,12 +263,13 @@ class OrderBook:
             'average': round(self.stats['amount'] / (self.stats['volume'] + 1e-6), 2),
             'high': order.price if order.price > self.stats['high'] else self.stats['high'],
             'low': order.price if order.price < self.stats['low'] else self.stats['low'],
-            'bid': remain_quantity if order.bid_or_ask == 'BID' else (-1*transaction_quantity),
-            'ask': remain_quantity if order.bid_or_ask == 'ASK' else (-1*transaction_quantity)
+            'bid': order.quantity - transaction_quantity if order.bid_or_ask == 'BID' else (-1*transaction_quantity),
+            'ask': order.quantity - transaction_quantity if order.bid_or_ask == 'ASK' else (-1*transaction_quantity)
         }
         self.update_stats(**updated_info)
         
-        return order_id
+        return order_id            
+
     
         
     def handle_market_order(self, order, time):
@@ -306,6 +292,56 @@ class OrderBook:
 
     def get_stats(self):
         return self.stats
+    
+    def add_order(self, order_id, bid_or_ask, price, quantity):
+        pass
+
+    def match_order(self, bid_or_ask, price, quantity):
+        transaction_quantity = 0
+        transaction_amount = 0
+        while quantity > 0:
+            if bid_or_ask == 'BID' and price >= self.asks[self.best_ask_index][0]:
+                pvo = self.asks
+                price_index = self.best_ask_index
+            elif bid_or_ask == 'ASK' and price <= self.bids[self.best_bid_index][0]:
+                pvo = self.bids
+                price_index = self.best_bid_index
+            else:
+                break
+
+            while len(pvo[price_index][2]) != 0:
+                matched_order_id = pvo[price_index][2][0][0]
+                matched_order_quantity = pvo[price_index][2][0][1]
+
+                if quantity >= matched_order_quantity:
+                    matched_quantity = matched_order_quantity
+                elif quantity < matched_order_quantity:
+                    matched_quantity = matched_order_quantity
+                
+                self.fill_order(matched_order_id, pvo[price_index][0], matched_quantity)
+                transaction_quantity += matched_quantity
+                matched_order_quantity -= matched_quantity      
+                pvo[price_index][1] -= matched_quantity
+                quantity -= matched_quantity
+
+                if matched_order_quantity == 0:
+                    # remove the empty order
+                    pvo[price_index][2].pop(0)
+
+                if quantity == 0:
+                    break
+            
+            transaction_amount += transaction_quantity * pvo[price_index][0]
+            
+            # check if best bid/ask needs to be updated
+            if pvo[price_index][1] == 0:
+                if bid_or_ask == 'BID' and price_index + 1 < len(pvo):
+                    self.best_ask_index += 1
+                elif bid_or_ask == 'ASK' and price_index - 1 >= 0:
+                    self.best_bid_index -= 1
+
+        return transaction_quantity, transaction_amount
+
 
     def daily_summarize(self):
         # clear unfinished orders
@@ -328,9 +364,10 @@ class OrderBook:
         self.reset()
         return daily_summarization['stats']
 
-    def fill_order(self, order_id, time, price, quantity):
+    def fill_order(self, order_id, price, quantity):
         # we don't update stats here, since one transection will be executed by two orders
 
+        time = self.market.get_time()
         if price <= 0:
             raise Exception("Invalid value: negative price")
         elif quantity <= 0:
@@ -369,4 +406,17 @@ class OrderBook:
     def _generate_order_id(self):
         self.num_of_order += 1
         return f"{self.code}_{self.num_of_order:05}"
-        
+
+    def determine_tick_size(self, price):
+        if price < 10:
+            return 0.01
+        elif price < 50:
+            return 0.05
+        elif price < 100:
+            return 0.1
+        elif price < 500:
+            return 0.5
+        elif price < 1000:
+            return 1
+        else:
+            return 5
