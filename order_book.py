@@ -121,51 +121,31 @@ class OrderBook:
     
     def handle_auction(self):
         time = self.market.get_time()
-        # match price of the bid and ask with max volume
-        if len(self.bids) == 0 or len(self.asks) == 0:
-            print('No quote!')
-            return
-        if self.bids[0][0] < self.asks[0][0]:
-            print('No match...')
-            return
 
         # locate the best bid at asks
-        best_bid = self.bids[0][0]
-        match_index = -1
-        for i, pvo in enumerate(self.asks):
-            if best_bid == pvo[0]:
-                match_index = i
-                break
-        if match_index == -1:
-            raise Exception('Liquidity Error: No successive quotes')
+        best_bid = self.bids[self.best_bid_index][0]
+        if self.best_bid_index < self.best_ask_index:
+            raise Exception('Liquidity Error: No matched auction order.')
 
         # construct accumulated volume of bids and asks
-        accum_bid = [pvo[1] for pvo in self.bids]
-        accum_ask = [pvo[1] for pvo in self.asks]
-        for i in range(1, accum_bid):
-            accum_bid[i] = accum_bid[i] + accum_bid[i-1]
-        for i in range(1, accum_ask):
-            accum_ask[i] = accum_ask[i] + accum_ask[i-1]
+        accum_bid_ask = [[pvo[1] for pvo in self.bids], [pvo[1] for pvo in self.asks]]
+
+        for i in range(1, len(accum_bid_ask[0])):
+            accum_bid_ask[0][i] += accum_bid_ask[0][i-1] # from 0 - len
+        for i in range(len(accum_bid_ask[1]) - 2, -1, -1):
+            accum_bid_ask[0][i] += accum_bid_ask[0][i+1] # from 0 - len
         
-        # match the max volume
-        i = 0
-        j = match_index
         max_match_volume = 0
-        match_bid_index = -1
-        match_ask_index = -1
-        while i < len(self.bids) and j >= 0:
-            match = min(accum_bid[i], accum_ask[j])
-            if match > max_match_volume:
-                max_match_volume = match
-                match_bid_index = i
-                match_ask_index = j
-            i += 1
-            j -= 1
+        max_match_index = -1
+        for i in range(0, len(accum_bid_ask[0])):
+            if max_match_volume < min(accum_bid_ask[0][i], accum_bid_ask[1][i]):
+                max_match_volume = min(accum_bid_ask[0][i], accum_bid_ask[1][i])
+                max_match_index = i
         
-        match_price = self.bids[match_bid_index][0]
+        match_price = self.bids[max_match_index][0]
 
         # fill the orders
-        for pvos in [self.bids[:match_bid_index+1], self.asks[:match_ask_index+1]]:
+        for pvos in [self.bids[:max_match_index+1], self.asks[:match_ask_index+1]]:
             remain_quantity = max_match_volume
             while remain_quantity > 0:
                 pvo = pvos[0]
@@ -232,15 +212,17 @@ class OrderBook:
         self.market.send_message(
             Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'time': time, 'code': order.code, 'price': order.price, 'quantity': order.quantity}),
             time
-        )    
+        )
 
         remain_quantity = order.quantity
         transaction_amount = 0
         transaction_quantity = 0
 
+        if not matching:
+            self.add_order(order_id, order.bid_or_ask, order.price, order.quantity)
         # insert the order if order price is within best price or outside the price
         # else start matching
-        if order.bid_or_ask == 'BID' and (order.price <= self.bids[self.best_bid_index] or order.price < self.asks[self.best_ask_index]):
+        elif order.bid_or_ask == 'BID' and (order.price <= self.bids[self.best_bid_index] or order.price < self.asks[self.best_ask_index]):
             self.add_order(order_id, order.bid_or_ask, order.price, order.quantity)
         elif order.bid_or_ask == 'ASK' and (order.price >= self.asks[self.best_ask_index] or order.price > self.bids[self.best_bid_index]):
             self.add_order(order_id, order.bid_or_ask, order.price, order.quantity)
@@ -266,6 +248,7 @@ class OrderBook:
             'bid': order.quantity - transaction_quantity if order.bid_or_ask == 'BID' else (-1*transaction_quantity),
             'ask': order.quantity - transaction_quantity if order.bid_or_ask == 'ASK' else (-1*transaction_quantity)
         }
+
         self.update_stats(**updated_info)
         
         return order_id            
@@ -277,12 +260,41 @@ class OrderBook:
         
         # assume there is no liquidity issue
         # add the limit order in the best price in the market
-        best_price = self.asks[0][0] if order.bid_or_ask == 'BID' else self.bids[0][0]
-        limit_order_id = self.handle_limit_order(LimitOrder.from_market_order(order, best_price), time, True)
+        
+        price = self.stats['up_limit'] if order.bid_or_ask == 'BID' else self.stats['low_limit']
+        transaction_quantity, transaction_amount = self.match_order(order.bid_or_ask, price, order.quantity)
+        transaction_price = round(transaction_amount / transaction_quantity, 2)
+        if transaction_quantity != order.quantity:
+            raise Exception("Liquidity error: The market order isn't finished.")
 
-        # check if the order is finished        
-        if self.get_order(limit_order_id).state == False:
-            raise Exception("The market order isn't finished")
+        order_id = self._generate_order_id()
+        limit_order = LimitOrder.from_market_order(order, transaction_price)
+
+        self.orders[order_id] = {
+            'order': limit_order,
+            'time': time,
+            'state': True,
+            'transactions': [[time, transaction_price, transaction_quantity]],
+            'modifications': [],
+            'cancellation': False
+        }
+
+        self.market.send_message(
+            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'time': time, 'code': order.code, 'price': transaction_price, 'quantity': transaction_quantity}),
+            time
+        )
+
+        self.market.send_message(
+            Message('AGENT', 'ORDER_FILLED', 'market', order.orderer, {'code': code, 'price': transaction_price, 'quantity': transaction_quantity}),
+            time
+        )
+
+        self.market.send_message(
+            Message('AGENT', 'ORDER_FINISHED', 'market', order.orderer, {'code': code, 'time': time}),
+            time
+        )
+
+
             
     def cancel_order(self):
         pass
@@ -294,7 +306,22 @@ class OrderBook:
         return self.stats
     
     def add_order(self, order_id, bid_or_ask, price, quantity):
-        pass
+        for i, pvo in enumerate(self.bids):
+            if price == pvo[0]:
+                fit_index = i
+                break
+
+        if bid_or_ask == 'BID':
+            self.bids[fit_index][1] += quantity
+            self.bids[fit_index][2].append([order_id, quantity])
+            if fit_index > self.best_bid_index:
+                self.best_bid_index = fit_index
+        elif bid_or_ask == 'ASK':
+            self.asks[fit_index][1] += quantity
+            self.asks[fit_index][2].append([order_id, quantity])
+            if fit_index < self.best_ask_index:
+                self.best_ask_index = fit_index
+        
 
     def match_order(self, bid_or_ask, price, quantity):
         transaction_quantity = 0
