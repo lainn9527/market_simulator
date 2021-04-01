@@ -27,8 +27,8 @@ class OrderBook:
                 }
             }
             code: code of security
-            bids: [[price(descending), volume, [[order_id, quantity]]]]
-            asks: [[price(ascending), volume, [[order_id, quantity]]]
+            bids: [[price, volume, [[order_id, quantity]]]]
+            asks: [[price, volume, [[order_id, quantity]]]
             stats: {
                 'base': float,
                 'value: float
@@ -60,8 +60,6 @@ class OrderBook:
 
     def reset(self):
         self.orders = dict()
-        self.bids = list()
-        self.asks = list()
         self.num_of_order = 0
         self.stats = {
             'up_limit': 0.0,
@@ -80,16 +78,6 @@ class OrderBook:
             'close': 0.0
         }
     
-    def set_base_price(self):
-        # base price for call auction in the open session
-        # use the close price of previous day as the base price and if it's the first day, use the fundamental value instead
-
-        if len(self.history) == 0:
-            self.stats['base'] = self.value
-        else:
-            self.stats['base'] = self.history[-1]['stats']['close']
-        
-        return self.stats['base']
 
     def set_price_list(self):
         # base price for call auction in the open session
@@ -130,14 +118,14 @@ class OrderBook:
         # construct accumulated volume of bids and asks
         accum_bid_ask = [[pvo[1] for pvo in self.bids], [pvo[1] for pvo in self.asks]]
 
-        for i in range(1, len(accum_bid_ask[0])):
-            accum_bid_ask[0][i] += accum_bid_ask[0][i-1] # from 0 - len
-        for i in range(len(accum_bid_ask[1]) - 2, -1, -1):
-            accum_bid_ask[0][i] += accum_bid_ask[0][i+1] # from 0 - len
+        for i in range(len(accum_bid_ask[0]) - 2, -1, -1):
+            accum_bid_ask[0][i] += accum_bid_ask[0][i+1]
+        for i in range(1, len(accum_bid_ask[1])):
+            accum_bid_ask[1][i] += accum_bid_ask[1][i-1]
         
         max_match_volume = 0
         max_match_index = -1
-        for i in range(0, len(accum_bid_ask[0])):
+        for i in range(len(accum_bid_ask[0])):
             if max_match_volume < min(accum_bid_ask[0][i], accum_bid_ask[1][i]):
                 max_match_volume = min(accum_bid_ask[0][i], accum_bid_ask[1][i])
                 max_match_index = i
@@ -145,26 +133,28 @@ class OrderBook:
         match_price = self.bids[max_match_index][0]
 
         # fill the orders
-        for pvos in [self.bids[:max_match_index+1], self.asks[:match_ask_index+1]]:
+        # bids: [[price, volume, [[order_id, quantity]]]]
+        for pvos in [self.bids[-1:max_match_index-1:-1], self.asks[:max_match_index+1]]:
             remain_quantity = max_match_volume
-            while remain_quantity > 0:
-                pvo = pvos[0]
-                if pvo[0] != match_price or remain_quantity == pvo[1]:
-                    # fill all orders
+            for pvo in pvos:
+                if match_price != pvo[0] or remain_quantity == pvo[1]:
+                    while len(pvo[2]) != 0:
+                        self.fill_order(pvo[2][0][0], pvo[0], pvo[2][0][1])
+                        pvo[2].pop(0)
                     remain_quantity -= pvo[1]
-                    for order_id, quantity in pvo[2]:
-                        self.fill_order(order_id, time, pvo[0], quantity)
-                    # remove the pvo from the bids/asks
-                    pvos.pop(0)
+                    pvo[1] = 0
                 else:
                     pvo[1] -= remain_quantity
                     while remain_quantity > pvo[2][0][1]:
-                        self.fill_order(pvo[2][0][0], time, pvo[0], pvo[2][0][1])
+                        self.fill_order(pvo[2][0][0], pvo[0], pvo[2][0][1])
                         remain_quantity -= pvo[2][0][1]
-                        # remove order with zero quantity
-                        pvo.pop(0)
-                    self.fill_order(pvo[2][0][0], time, pvo[0], remain_quantity)
+                        pvo[2].pop(0)
+                    self.fill_order(pvo[2][0][0], pvo[0], pvo[2][0][1])
                     pvo[2][0][1] -= remain_quantity
+
+        # update best bid/ask
+        self.best_bid_index = max_match_index if self.bids[max_match_index][1] != 0 or max_match_index == 0 else max_match_index - 1
+        self.best_ask_index = max_match_index if self.asks[max_match_index][1] != 0 or max_match_index == len(self.asks) - 1 else max_match_index + 1
 
         # update the stats
         updated_info = {
@@ -379,6 +369,7 @@ class OrderBook:
                     Message('AGENT', 'ORDER_INVALIDED', 'market', order.orderer, (order_id, order)),
                     self.market.get_time()
                 )
+
         daily_summarization = {
             'date': self.market.get_time().date().isoformat(),
             'order': self.orders,
@@ -414,7 +405,7 @@ class OrderBook:
         for item in target_order.transactions:
             total_quantity += item[2]
         if total_quantity == target_order.order.quantity:
-            target_order.state = 1
+            target_order.state = True
             # send message of finishing order
             self.market.send_message(
                 Message('AGENT', 'ORDER_FINISHED', 'market', target_order.order.orderer, {'code': target_order.code, 'time': time}),

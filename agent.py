@@ -1,6 +1,6 @@
 from message import Message
 from order import LimitOrder, MarketOrder
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 
 class Agent:
     num_of_agent = 0
@@ -80,23 +80,21 @@ class Agent:
             self.handle_close()
 
         elif message.subject == 'OPEN_AUCTION':
-            # receive base prices when open, nothing when close
-            self.is_trading = True
-            if 'price_info' not in message.content.keys():
-                self.is_close_auction = True
-                self.period_timestep = message.content['timestep']
-            else:
+            if self.current_time.time() == time(hour = 8, minute = 30, second = 0):
+                self.is_trading = True
                 self.is_open_auction = True
-                self.period_timestep = message.content['timestep']
+            else:
+                self.is_close_auction = True
             
+            self.period_timestep = message.content['timestep']            
             self.schedule_auction()
 
         elif message.subject == 'CLOSE_AUCTION':
             # receive open price when open, close price when close
             # timestep++
-            if 'open' in message.content.keys():
+            if self.is_open_auction == True:
                 self.is_open_auction = False
-            elif 'close' in message.content.keys():
+            elif self.is_close_auction == True:
                 self.is_trading = False
                 self.is_close_auction = False
 

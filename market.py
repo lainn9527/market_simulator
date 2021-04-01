@@ -61,9 +61,9 @@ class Market:
         # determine the price list of orderbook
         for code, orderbook in self.orderbooks.items():
             orderbook.set_price_list()
-
+            
         # provide liquidity
-
+        
         
 
         # notify agents
@@ -90,26 +90,13 @@ class Market:
         self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info))
 
     def start_auction(self, timestep):
-        # if open, set the base price for auction and notify all agents the price information
-        if self.get_time().time() == time(hour = 8, minute = 30, second = 0):
-            price_info = {}
-            for code, orderbook in self.orderbooks.items():
-                base_price = orderbook.set_base_price()
-                base_prices[code] = orderbook.set_base_price()
-                price_info[code] = {'base_price': base_price, 'tick_size': self.determine_tick_size(base_price)}
-            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'price_info': price_info, 'timestep': timestep})
-
-        elif self.get_time().time() == time(hour = 13, minute = 25, second = 0):
-            msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'timestep': timestep})
-        # send open time and base price to all agents and start the auction
+        # send open time to all agents and start the auction
+        msg = Message('ALL_AGENTS', 'OPEN_AUCTION', 'market', 'agents', {'timestep': timestep})
         self.announce(msg, self.get_time())
 
     def close_auction(self):
         self.step()
-        price = {}
-        for code, orderbook in self.orderbooks.items():
-            price[code] = orderbook.handle_auction()
-        msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', price)
+        msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', None)
         self.announce(msg, self.get_time())
 
     def start_continuous_trading(self, timestep):
@@ -145,7 +132,6 @@ class Market:
             if not isinstance(message.content, MarketOrder):
                 raise Exception
             self.get_orderbook(message.content.code).handle_market_order(message.content, self.get_time())
-
         
         elif message.subject == 'CANCEL_ORDER':
             self.handle_market_order(message.content)
