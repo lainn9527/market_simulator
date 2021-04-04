@@ -128,3 +128,5 @@ class Core:
     def best_asks(self, code, number):
         return self.market.best_asks(code, number)
 
+    def get_price_info(self, code):
+        return self.market.get_price_info(code)

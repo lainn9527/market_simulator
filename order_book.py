@@ -55,12 +55,19 @@ class OrderBook:
         self.best_ask_index = None
         self.num_of_order = None
         self.stats = None
+        self.price_info = None
         self.reset()
 
 
     def reset(self):
         self.orders = dict()
         self.num_of_order = 0
+        self.price_info = {
+            'up_limit': 0.0,
+            'low_limit': 0.0,
+            'tick_size': 0.0,
+            'base': 0.0,
+        }
         self.stats = {
             'up_limit': 0.0,
             'low_limit': 0.0,

@@ -33,25 +33,12 @@ class Market:
     def get_time(self):
         return self.current_time
 
-    def best_asks(self, code, number):
-        if len(self.get_orderbook(code).asks) < number:
-            number = len(self.get_orderbook(code).asks)
-        return [self.get_time(), [ [item[0], item[1]] for item in self.get_orderbook(code).asks[:number] ]]
+    def best_asks(self, code, number = 1):
+        return [[item[0], item[1]] for item in self.get_orderbook(code).asks[self.get_orderbook(code).best_ask_index:self.get_orderbook(code).best_ask_index + number]]
     
-    def best_bids(self, code, number):
-        if len(self.get_orderbook(code).bids) < number:
-            number = len(self.get_orderbook(code).bids)
-        return [self.get_time(), [ [item[0], item[1]] for item in self.get_orderbook(code).bids[:number] ]]
+    def best_bids(self, code, number = 1):
+        return [{'price': item[0], 'volume': item[1]} for item in self.get_orderbook(code).bids[min(self.get_orderbook(code).best_bid_index + 1 - number, 0):self.get_orderbook(code).best_bid_index + 1]]
     
-    def inside_asks(self, code, price):
-        ob = get_orderbook(code)
-
-    
-    def inside_bids(self, code, price):
-        pass
-
-    def update_price(self):
-        pass
 
     def step(self):
         self.current_time += timedelta(seconds = self.time_scale)
@@ -63,9 +50,8 @@ class Market:
             orderbook.set_price_list()
             
         # provide liquidity
-        
-        
 
+        
         # notify agents
         msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', {'time': self.get_time(), 'total_timestep': total_timestep})
         self.announce(msg, self.get_time())
@@ -152,9 +138,8 @@ class Market:
     def get_securities(self):
         return list(self.orderbooks.keys())
 
-    def get_price_info(self):
-        pass
-
+    def get_price_info(self, code):
+        return self.get_orderbook(code).price_info
     def determine_tick_size(self):
         if self.value < 10:
             return 0.01

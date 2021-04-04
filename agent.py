@@ -10,9 +10,7 @@ class Agent:
         self.type = _type
         self.start_cash = start_cash
         self.security_unit = security_unit
-        self.signature = f"agent_{self.type}_{self.get_counter()}" if _id == None else _id
-        self.unique_id = None
-        self.signature = None
+        self.unique_id = f"agent_{self.type}_{self.get_counter()}" if _id == None else _id
         self.core = None
         self.start_time = None
         self.time_scale = None
@@ -45,14 +43,14 @@ class Agent:
     def place_order(self, _type, code, bid_or_ask, volume, price = 0):
         # check valid
         if _type == 'limit':
-            order = LimitOrder(self.signature, code, 'LIMIT', bid_or_ask, volume, price)
-            msg = Message('MARKET', 'LIMIT_ORDER', self.signature, 'market', order)
+            order = LimitOrder(self.unique_id, code, 'LIMIT', bid_or_ask, volume, price)
+            msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', order)
         elif _type == 'market':
-            order = MarketOrder(self.signature, code, 'MARKET', bid_or_ask, volume)
-            msg = Message('MARKET', 'MARKET_ORDER', self.signature, 'market', order)
+            order = MarketOrder(self.unique_id, code, 'MARKET', bid_or_ask, volume)
+            msg = Message('MARKET', 'MARKET_ORDER', self.unique_id, 'market', order)
         elif _type == 'auction':
-            order = LimitOrder(self.signature, code, 'LIMIT', bid_or_ask, volume, price)
-            msg = Message('MARKET', 'AUCTION_ORDER', self.signature, 'market', order)
+            order = LimitOrder(self.unique_id, code, 'LIMIT', bid_or_ask, volume, price)
+            msg = Message('MARKET', 'AUCTION_ORDER', self.unique_id, 'market', order)
         else:
             raise Exception("Invalid order type")
         
@@ -63,7 +61,7 @@ class Agent:
         self.core.send_message(msg, self.current_time())
 
     def receive_message(self, message):
-        if message.receiver != self.signature and message.receiver != 'agents':
+        if message.receiver != self.unique_id and message.receiver != 'agents':
             raise Exception('Wrong receiver!')
 
         message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
@@ -146,9 +144,11 @@ class Agent:
             self.orders[message.content['code']][-1]['finished_time'] = message.content['time']
 
             self.log_event('ORDER_FINISHED', self.orders[message.content['code']][-1])
-            
+        
+        elif message.subject == 'ORDER_INVALIDED':
+            pass
         else:
-            raise Exception(f"Invalid subject for agent {self.signature}")
+            raise Exception(f"Invalid subject for agent {self.unique_id}")
 
     def current_price(self, bid_or_ask, code, number):
         return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
@@ -179,5 +179,6 @@ class Agent:
     
     def schedule_continuous_trading(self):
         pass
+    
     def handle_close(self):
         pass

@@ -1,10 +1,11 @@
 import numpy as np
+import math
 from agent import Agent
 
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _type, _id = None, start_cash = 1000000, security_unit = 1000, bid_side = 0.8, trading_time = 10, range_of_price = 0.1, range_of_quantity = 5):
+    def __init__(self, _type, _id = None, start_cash = 1000000, security_unit = 1000, bid_side = 0.8, trading_time = 10, range_of_price = 0.05, range_of_quantity = 5):
         super().__init__(_type, _id, start_cash, security_unit)
         ZeroIntelligenceAgent.add_counter()
 
@@ -46,13 +47,19 @@ class ZeroIntelligenceAgent(Agent):
             return None
 
         code = np.random.choice(no_order_security)
+        price_info = self.core.get_price_info(code)
+
         if np.random.binomial(n = 1, p = 0.8) == 1 or self.holdings[code] == 0:
             bid_or_ask = 'BID'
             quantity = np.random.randint(1, self.range_of_quantity) * self.security_unit
         else:
             bid_or_ask = 'ASK'
             quantity = self.holdings[code]
-        price = (np.random.rand() * (self.range_of_price * 2) - self.range_of_price + 1) * self.current_price(bid_or_ask, code, 1) # -price range ~ +price range
+        
+        best_price = self.current_price(bid_or_ask, code, 1)[0]['price']
+        tick_range = math.floor((best_price * self.range_of_price) / price_info['tick_size'])
+        price = np.clip(best_price + price_info['tick_size'] * np.random.randint(-tick_range, tick_range), price_info['low_limit'], price_info['up_limit'])
+
 
         return {'code': code, 'bid_or_ask': bid_or_ask, 'price': price, 'quantity': quantity}
         
