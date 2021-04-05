@@ -32,9 +32,10 @@ class Agent:
         self.core = core
         self.start_time = start_time
         self.time_scale = time_scale
-        self.orders.update({code: [] for code in securities})
+        self.orders.update({code: {} for code in securities})
         self.holdings.update({code: 0 for code in securities})
         # ready to go
+        self.log_event('AGENT_PREPARED', 'Ready to go!')
 
     def step(self):
         self.current_time += timedelta(seconds = self.time_scale)
@@ -57,9 +58,9 @@ class Agent:
         if volume * price > self.holdings['CASH']:
             raise Exception("Not enough money")
         
-        self.orders['code'].append({'order': order, 'placed_time': None, 'finished_time': None, 'filled_quantity': 0, 'filled_amount': 0.0})
-        self.core.send_message(msg, self.current_time())
-
+        self.core.send_message(msg, self.current_time)
+    def cancel_order(self):
+        pass
     def receive_message(self, message):
         if message.receiver != self.unique_id and message.receiver != 'agents':
             raise Exception('Wrong receiver!')
@@ -99,7 +100,7 @@ class Agent:
             # stop placing order in 08:59:59.999 or 13:29:29.999
             # steps by hand
             self.period_timesteps = None
-            self.current_time += 1
+            self.current_time += timedelta(seconds = self.time_scale)
 
         elif message.subject == 'OPEN_CONTINUOUS_TRADING':
             self.is_continuous_trading = True
@@ -112,38 +113,45 @@ class Agent:
             # stop placing order in continuous trading (13:24:59.999)
             # steps to 13:25:00 by hand
             self.period_timesteps = None
-            self.current_time += 1
+            self.current_time += timedelta(seconds = self.time_scale)
 
         elif message.subject == 'ORDER_PLACED':
-            # receive order info = {'order_id': order_id, 'code': order.code, 'price': order.price, 'quantity': order.quantity}
             # check if the order is transformed from market order
-            if isinstance(message.content, MarketOrder):
-                self.orders['code'][-1]['order'] = LimitOrder.from_market_order(self.orders['code'][-1]['order'], message.content['price'])
-
-            self.orders['code']['placed_time'] = message.content['time']
-            self.holdings['CASH'] -= message.content['price'] * message.content['quantity']
-            if self.holdings['CASH'] < 0:
-                raise Exception("Agent has negative cash value.")
-
-            self.log_event('ORDER_PLACED', self.orders['code'][-1])
+            order = message.content['order']
+            self.orders[order.code][order.order_id] = {'order': order, 'placed_time': message.content['time'], 'finished_time': None, 'filled_quantity': 0, 'filled_amount': 0.0}
+            if order.bid_or_ask == 'BID':
+                self.holdings['CASH'] -= order.price * order.quantity
+                if self.holdings['CASH'] < 0:
+                    raise Exception("Agent has negative cash value.")
+            elif order.bid_or_ask == 'ASK':
+                self.holdings[order.code] -= order.quantity
+                if self.holdings[order.code] < 0:
+                    raise Exception(f"Agent has negative security {order.code}.")
+            
+            self.log_event('ORDER_PLACED', self.orders[order.code][order.order_id])
 
 
         elif message.subject == 'ORDER_FILLED':
             # receive the transactions (partial filled) of the order = {'code': code, 'price': price, 'quantity': quantity}
-            self.orders[message.content['code']][-1]['filled_quantity'] += message.content['quantity']
-            self.orders[message.content['code']][-1]['filled_amount'] += message.content['price'] * message.content['quantity']
-            self.holdings['code'] += message.content['quantity']
+            self.orders[message.content['code']][message.content['order_id']]['filled_quantity'] += message.content['quantity']
+            self.orders[message.content['code']][message.content['order_id']]['filled_amount'] += message.content['price'] * message.content['quantity']
 
+            if self.orders[message.content['code']][message.content['order_id']]['order'].bid_or_ask == 'BID':
+                self.holdings[message.content['code']] += message.content['quantity']
+            
+            elif self.orders[message.content['code']][message.content['order_id']]['order'].bid_or_ask == 'ASK':
+                self.holdings['CASH'] += message.content['price'] * message.content['quantity']
+            
             self.log_event('ORDER_FILLED', {'price': message.content['price'], 'quantity': message.content['quantity']})
 
 
         elif message.subject == 'ORDER_FINISHED':
-            # receive the finisged order info = {'price': round(total_amount/total_quantity, 2),'quantity': total_quantity}
-            if self.orders[message.content['code']][-1]['order'].quantity != self.orders[message.content['code']][-1]['filled_quantity']:
+            if self.orders[message.content['code']][message.content['order_id']]['order'].quantity != self.orders[message.content['code']][message.content['order_id']]['filled_quantity']:
                 raise Exception("The quantity hasn't fulfilled")
-            self.orders[message.content['code']][-1]['finished_time'] = message.content['time']
 
-            self.log_event('ORDER_FINISHED', self.orders[message.content['code']][-1])
+            self.orders[message.content['code']][message.content['order_id']]['finished_time'] = message.content['time']
+
+            self.log_event('ORDER_FINISHED', self.orders[message.content['code']][message.content['order_id']])
         
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -154,7 +162,7 @@ class Agent:
         return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
 
     def log_event(self, event_type, event):
-        print("Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
+        print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
     
     def timestep_to_time(self, timestep):
         return timedelta(seconds = self.time_scale * timestep)
@@ -182,3 +190,7 @@ class Agent:
     
     def handle_close(self):
         pass
+
+    def get_order(self):
+        pass
+    

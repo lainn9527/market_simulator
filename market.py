@@ -34,10 +34,10 @@ class Market:
         return self.current_time
 
     def best_asks(self, code, number = 1):
-        return [[item[0], item[1]] for item in self.get_orderbook(code).asks[self.get_orderbook(code).best_ask_index:self.get_orderbook(code).best_ask_index + number]]
+        return [{'price': item[0], 'volume': item[1]} for item in self.get_orderbook(code).asks[self.get_orderbook(code).best_ask_index:self.get_orderbook(code).best_ask_index + number]]
     
     def best_bids(self, code, number = 1):
-        return [{'price': item[0], 'volume': item[1]} for item in self.get_orderbook(code).bids[min(self.get_orderbook(code).best_bid_index + 1 - number, 0):self.get_orderbook(code).best_bid_index + 1]]
+        return [{'price': item[0], 'volume': item[1]} for item in self.get_orderbook(code).bids[max(self.get_orderbook(code).best_bid_index + 1 - number, 0):self.get_orderbook(code).best_bid_index + 1]]
     
 
     def step(self):
@@ -73,7 +73,7 @@ class Market:
             # get the daily info
             daily_info[code] = orderbook.daily_summarize()
 
-        self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info))
+        self.announce(Message('ALL_AGENTS', 'CLOSE_SESSION', 'market', 'agents', daily_info), self.get_time())
 
     def start_auction(self, timestep):
         # send open time to all agents and start the auction
@@ -82,6 +82,9 @@ class Market:
 
     def close_auction(self):
         self.step()
+        for code, orderbook in self.orderbooks.items():
+            orderbook.handle_auction()
+
         msg = Message('ALL_AGENTS', 'CLOSE_AUCTION', 'market', 'agents', None)
         self.announce(msg, self.get_time())
 
@@ -112,7 +115,7 @@ class Market:
         elif message.subject == 'AUCTION_ORDER':
             if not isinstance(message.content, LimitOrder):
                 raise Exception
-            self.get_orderbook(message.content.code).handle_limit_order(message.content, self.get_time(), False)
+            self.get_orderbook(message.content.code).handle_limit_order(message.content, False)
 
         elif message.subject == 'MARKET_ORDER':
             if not isinstance(message.content, MarketOrder):
@@ -140,6 +143,15 @@ class Market:
 
     def get_price_info(self, code):
         return self.get_orderbook(code).price_info
+
+    def market_stats(self):
+        amount = 0
+        volume = 0
+        for code, orderbook in self.orderbooks.items():
+            amount = orderbook.stats['amount']
+            volume = orderbook.stats['volume']
+        return {'amount': amount, 'volume': volume}
+
     def determine_tick_size(self):
         if self.value < 10:
             return 0.01

@@ -1,9 +1,9 @@
 import argparse
-import datetime
 from market import Market
 from zero_intelligence_agent import ZeroIntelligenceAgent
+from broker_agent import BrokerAgent
 from core import Core
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 class TestCase:
     def test_init(self, core):
@@ -12,9 +12,11 @@ class TestCase:
 
     def test_basic_mechanism(self):
         market = Market({'TSMC': 300})
-        agents = [ZeroIntelligenceAgent('zero_intelligence', start_cash = 10000000)]
+        agents = [ZeroIntelligenceAgent(start_cash = 10000000) for i in range(100)] + [BrokerAgent('TSMC')]
         core = Core(market, agents)
-        core.run()
+        
+        self.test_init(core)
+        core.run(time_scale=0.1)
 
 if __name__ == '__main__':
     test = TestCase()

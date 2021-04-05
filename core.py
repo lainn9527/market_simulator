@@ -23,7 +23,7 @@ class Core:
         self.real_start_time = None
         self.simulated_time = None
         self.randomizer = None
-        self.agents = agents
+        self.agents = {agent.unique_id: agent for agent in agents}
         self.market = market
     
     def run(self, num_simulation = 100, num_of_days = 1, time_scale = 0.001):
@@ -33,7 +33,7 @@ class Core:
         
         # register the core for the market and agents
         self.market.start(self, self.simulated_time, time_scale)
-        for agent in self.agents:
+        for _, agent in self.agents.items():
             agent.start(self, self.simulated_time, time_scale, self.market.get_securities())
 
         # start to simulate
@@ -49,27 +49,31 @@ class Core:
             for timestep in range(open_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
-            # simulated_time == 08:59:59.999
-            self.market.close_auction()
-            # add a timestep
-            self.simulated_time += timedelta(seconds = time_scale)
 
-            # continuous trading
+            # close auction at 08:59:59.999
+            self.simulated_time += timedelta(seconds = time_scale)
+            self.market.close_auction()
+            self.handle_messages()
+
+            # continuous trading at 09:00:00.000
             self.market.start_continuous_trading(continuous_trading_timestep)
             for timestep in range(continuous_trading_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
-            self.market.close_continuous_trading()
-            self.simulated_time += timedelta(seconds = time_scale)
 
-            # close market
+            # close continuous trading at 13:24:59.999
+            self.simulated_time += timedelta(seconds = time_scale)
+            self.market.close_continuous_trading()
+
+            # open auction at 13:25:00.000
             self.market.start_auction(close_auction_timestep)
             for timestep in range(close_auction_timestep):
                 self.step()
                 self.simulated_time += timedelta(seconds = time_scale)
-            self.market.close_auction()
-            self.market.close_session()
             self.simulated_time += timedelta(seconds = time_scale)
+            self.market.close_auction()
+            self.handle_messages()
+            self.market.close_session()
 
             # update the time
             self.simulated_time += timedelta(days = 1)
@@ -77,14 +81,17 @@ class Core:
     
     def step(self):
         # agents make desicion
-        for agent in self.agents:
+        for _, agent in self.agents.items():
             agent.step()
 
         # check the message queue and execute the actions from agents on the market
-        while not self.message_queue.empty():
-            self.handle_message(self.message_queue.get())
+        self.handle_messages()
         
         self.market.step() # what to do?
+        # add timestep
+        if self.simulated_time.second == 0 and self.simulated_time.microsecond == 0:
+            print(f"At: {self.simulated_time.isoformat()}, the trading amount is: {self.market.market_stats()}")
+
 
 
 
@@ -96,7 +103,12 @@ class Core:
 
     def announce(self, message, send_time):
         # announce to all agents immediately
+        print(f"==========Time: {self.simulated_time}, {message.subject} Start==========")
         self.handle_message(message)
+
+    def handle_messages(self):
+        while not self.message_queue.empty():
+            self.handle_message(self.message_queue.get())
 
     def handle_message(self, message):
         if message.postcode == 'MARKET':
@@ -107,20 +119,20 @@ class Core:
 
         elif message.postcode == 'AGENT':
             # check if agent exist:
-            if check_agent(message.receiver):
+            if self.check_agent(message.receiver):
                 self.agents[message.receiver].receive_message(message)
             else:
                 raise Exception('The agent: {message.receiver} doesn\'t exist')
             
         elif message.postcode == 'ALL_AGENTS':
-            for agent in self.agents:
+            for _, agent in self.agents.items():
                 agent.receive_message(message)
 
         else:
             raise Exception
     
     def check_agent(self, agent):
-        pass
+        return True
 
     def best_bids(self, code, number):
         return self.market.best_bids(code, number)

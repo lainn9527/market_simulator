@@ -101,13 +101,13 @@ class OrderBook:
         valid_price = [round(base_price + tick_size * i, 2) for i in range(-1 * valid_ticks, valid_ticks + 1, 1)]
         low_limit = valid_price[0]
         up_limit = valid_price[-1]
-        self.bids = [valid_price.copy(), [0]*len(valid_price), []]
-        self.asks = [valid_price.copy(), [0]*len(valid_price), []]
+        self.bids = [[price, 0, []] for price in valid_price]
+        self.asks = [[price, 0, []] for price in valid_price]
 
         # point to the base price
         self.best_bid_index = self.best_ask_index = valid_ticks        
 
-
+        self.price_info = {'base': base_price, 'up_limit': up_limit, 'low_limit': low_limit, 'tick_size': tick_size}
         self.stats['base'] = base_price
         self.stats['up_limit'] = up_limit
         self.stats['low_limit'] = low_limit
@@ -120,7 +120,8 @@ class OrderBook:
         # locate the best bid at asks
         best_bid = self.bids[self.best_bid_index][0]
         if self.best_bid_index < self.best_ask_index:
-            raise Exception('Liquidity Error: No matched auction order.')
+            # raise Exception('Liquidity Error: No matched auction order.')
+            pass
 
         # construct accumulated volume of bids and asks
         accum_bid_ask = [[pvo[1] for pvo in self.bids], [pvo[1] for pvo in self.asks]]
@@ -168,10 +169,10 @@ class OrderBook:
             'amount': match_price * max_match_volume,
             'volume': max_match_volume
         }
-        if time == datetime.time(hour = 9, minute = 0, second = 0):
+        if time.time() == datetime.time(hour = 9, minute = 0, second = 0):
             # auction in open
             updated_info['open'] = match_price
-        elif time == datetime.time(hour = 13, minute = 30, second = 0):
+        elif time.time() == datetime.time(hour = 13, minute = 30, second = 0):
             # auction in close
             updated_info['close'] = match_price        
         else:
@@ -194,6 +195,7 @@ class OrderBook:
         '''
 
         order_id = self._generate_order_id()
+        order.order_id = order_id
         time = self.market.get_time()
         # add the order to the orderbook
         self.orders[order_id] = {
@@ -207,7 +209,7 @@ class OrderBook:
 
         # send message to the orderer
         self.market.send_message(
-            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'time': time, 'code': order.code, 'price': order.price, 'quantity': order.quantity}),
+            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order': order, 'time': time}),
             time
         )
 
@@ -266,6 +268,7 @@ class OrderBook:
 
         order_id = self._generate_order_id()
         limit_order = LimitOrder.from_market_order(order, transaction_price)
+        limit_order.order_id = order_id
 
         self.orders[order_id] = {
             'order': limit_order,
@@ -277,17 +280,17 @@ class OrderBook:
         }
 
         self.market.send_message(
-            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order_id': order_id, 'time': time, 'code': order.code, 'price': transaction_price, 'quantity': transaction_quantity}),
+            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order': limit_order, 'time': time}),
             time
         )
 
         self.market.send_message(
-            Message('AGENT', 'ORDER_FILLED', 'market', order.orderer, {'code': code, 'price': transaction_price, 'quantity': transaction_quantity}),
+            Message('AGENT', 'ORDER_FILLED', 'market', order.orderer, {'code': code, 'order_id': order_id, 'price': transaction_price, 'quantity': transaction_quantity}),
             time
         )
 
         self.market.send_message(
-            Message('AGENT', 'ORDER_FINISHED', 'market', order.orderer, {'code': code, 'time': time}),
+            Message('AGENT', 'ORDER_FINISHED', 'market', order.orderer, {'code': code, 'order_id': order_id, 'time': time}),
             time
         )
 
@@ -311,13 +314,14 @@ class OrderBook:
         if bid_or_ask == 'BID':
             self.bids[fit_index][1] += quantity
             self.bids[fit_index][2].append([order_id, quantity])
-            if fit_index > self.best_bid_index:
+            if len(self.bids[self.best_bid_index][2]) == 0 or fit_index > self.best_bid_index:
                 self.best_bid_index = fit_index
         elif bid_or_ask == 'ASK':
             self.asks[fit_index][1] += quantity
             self.asks[fit_index][2].append([order_id, quantity])
-            if fit_index < self.best_ask_index:
+            if len(self.asks[self.best_ask_index][2]) == 0 or fit_index < self.best_ask_index:
                 self.best_ask_index = fit_index
+
         
 
     def match_order(self, bid_or_ask, price, quantity):
@@ -369,11 +373,11 @@ class OrderBook:
 
     def daily_summarize(self):
         # clear unfinished orders
-        for order_id, order in self.orders:
+        for order_id, order in self.orders.items():
             # notify the orderer the invalidation of the unfinished order
-            if order.state == False:
+            if order['state'] == False:
                 self.market.send_message(
-                    Message('AGENT', 'ORDER_INVALIDED', 'market', order.orderer, (order_id, order)),
+                    Message('AGENT', 'ORDER_INVALIDED', 'market', order['order'].orderer, {'code': order['order'].code, 'order_id': order['order'].order_id}),
                     self.market.get_time()
                 )
 
@@ -399,28 +403,28 @@ class OrderBook:
             raise Exception("Invalid value: negative quantity")
 
         target_order = self.get_order(order_id)
-        target_order.transactions.append([time, price, quantity])
+        target_order['transactions'].append([time, price, quantity])
 
         # send message of transactions
         self.market.send_message(
-            Message('AGENT', 'ORDER_FILLED', 'market', target_order.order.orderer, {'code': target_order.code, 'price': price, 'quantity': quantity}),
+            Message('AGENT', 'ORDER_FILLED', 'market', target_order['order'].orderer, {'code': target_order['order'].code, 'order_id': target_order['order'].order_id, 'price': price, 'quantity': quantity}),
             time
         )
 
         # check if this order is finished
         total_quantity = 0
-        for item in target_order.transactions:
+        for item in target_order['transactions']:
             total_quantity += item[2]
-        if total_quantity == target_order.order.quantity:
-            target_order.state = True
+        if total_quantity == target_order['order'].quantity:
+            target_order['state'] = True
             # send message of finishing order
             self.market.send_message(
-                Message('AGENT', 'ORDER_FINISHED', 'market', target_order.order.orderer, {'code': target_order.code, 'time': time}),
+                Message('AGENT', 'ORDER_FINISHED', 'market', target_order['order'].orderer, {'code': target_order['order'].code, 'order_id': target_order['order'].order_id, 'time': time}),
                 time
             )
 
     def update_stats(self, **name_val):
-        for col, val in name_val:
+        for col, val in name_val.items():
             if col not in self.stats.keys():
                 raise Exception('Invalid name')
             elif col in ['open', 'high', 'low', 'close']:
