@@ -5,12 +5,12 @@ from datetime import datetime, timedelta, time
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _type, _id = None, start_cash = 10000000, security_unit = 1000):
+    def __init__(self, _type, start_cash = 10000000, security_unit = 1000):
         Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
         self.security_unit = security_unit
-        self.unique_id = f"agent_{self.type}_{self.get_counter()}" if _id == None else _id
+        self.unique_id = f"agent_{self.type}_{self.get_counter()}"
         self.core = None
         self.start_time = None
         self.time_scale = None
@@ -162,10 +162,11 @@ class Agent:
         return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
 
     def log_event(self, event_type, event):
-        print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
+        # print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
+        return
     
     def timestep_to_time(self, timestep):
-        return timedelta(seconds = self.time_scale * timestep)
+        return timedelta(seconds = (self.time_scale * timestep))
 
     @classmethod
     def add_counter(cls):

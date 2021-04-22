@@ -12,11 +12,14 @@ class TestCase:
 
     def test_basic_mechanism(self):
         market = Market({'TSMC': 300})
-        agents = [ZeroIntelligenceAgent(start_cash = 10000000) for i in range(100)] + [BrokerAgent('TSMC')]
+        agents = {
+            'ZeroIntelligenceAgent': [ZeroIntelligenceAgent(start_cash = 10000000) for i in range(1000)],
+            'BrokerAgent': [BrokerAgent('TSMC')]
+        }
         core = Core(market, agents)
         
         self.test_init(core)
-        core.run(time_scale=0.1)
+        core.run(time_scale=1)
 
 if __name__ == '__main__':
     test = TestCase()

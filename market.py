@@ -9,7 +9,8 @@ class Market:
         self.start_time = None
         self.time_scale = None
         self.current_time = None
-    
+
+
     def build_orderbooks(self, security_values):
         if len(security_values) == 0:
             raise Exception
@@ -46,12 +47,10 @@ class Market:
     def open_session(self, open_time, total_timestep):
         self.current_time = open_time
         # determine the price list of orderbook
-        for code, orderbook in self.orderbooks.items():
+        for _, orderbook in self.orderbooks.items():
             orderbook.set_price_list()
-            
-        # provide liquidity
+            # orderbook
 
-        
         # notify agents
         msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', {'time': self.get_time(), 'total_timestep': total_timestep})
         self.announce(msg, self.get_time())

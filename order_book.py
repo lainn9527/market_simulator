@@ -53,9 +53,13 @@ class OrderBook:
         self.asks = None
         self.best_bid_index = None
         self.best_ask_index = None
+        self.current_price = None
         self.num_of_order = None
         self.stats = None
         self.price_info = None
+        self.transactions = None
+        self.last_transaction_index = None
+        self.step_price = None
         self.reset()
 
 
@@ -84,6 +88,9 @@ class OrderBook:
             'low': 0.0,
             'close': 0.0
         }
+        self.transactions = []
+        self.last_transaction_index = -1
+        self.step_price = []
     
 
     def set_price_list(self):
@@ -233,22 +240,23 @@ class OrderBook:
             if transaction_quantity > 0:
                 self.fill_order(order_id, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
 
+                # update the stats
+                updated_info = {
+                    'amount': transaction_amount,
+                    'volume': transaction_quantity,
+                    'average': round(self.stats['amount'] / (self.stats['volume'] + 1e-6), 2),
+                    'high': order.price if order.price > self.stats['high'] else self.stats['high'],
+                    'low': order.price if order.price < self.stats['low'] else self.stats['low'],
+                    'bid': order.quantity - transaction_quantity if order.bid_or_ask == 'BID' else (-1*transaction_quantity),
+                    'ask': order.quantity - transaction_quantity if order.bid_or_ask == 'ASK' else (-1*transaction_quantity)
+                }
+
+                self.update_stats(**updated_info)
+
             # update bid/ask if the limit order is partially filled and placed order
             if transaction_quantity != order.quantity:
                 self.add_order(order_id, order.bid_or_ask, order.price, order.quantity - transaction_quantity)
         
-        # update the stats
-        updated_info = {
-            'amount': transaction_amount,
-            'volume': transaction_quantity,
-            'average': round(self.stats['amount'] / (self.stats['volume'] + 1e-6), 2),
-            'high': order.price if order.price > self.stats['high'] else self.stats['high'],
-            'low': order.price if order.price < self.stats['low'] else self.stats['low'],
-            'bid': order.quantity - transaction_quantity if order.bid_or_ask == 'BID' else (-1*transaction_quantity),
-            'ask': order.quantity - transaction_quantity if order.bid_or_ask == 'ASK' else (-1*transaction_quantity)
-        }
-
-        self.update_stats(**updated_info)
         
         return order_id            
 
@@ -316,6 +324,7 @@ class OrderBook:
             self.bids[fit_index][2].append([order_id, quantity])
             if len(self.bids[self.best_bid_index][2]) == 0 or fit_index > self.best_bid_index:
                 self.best_bid_index = fit_index
+
         elif bid_or_ask == 'ASK':
             self.asks[fit_index][1] += quantity
             self.asks[fit_index][2].append([order_id, quantity])
@@ -369,6 +378,9 @@ class OrderBook:
                     self.best_bid_index -= 1
 
         return transaction_quantity, transaction_amount
+
+    def step_summarize(self):
+        self.step_price = self.transactions[self.last_transaction_index][0]
 
 
     def daily_summarize(self):

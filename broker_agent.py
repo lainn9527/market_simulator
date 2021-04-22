@@ -4,8 +4,8 @@ from agent import Agent
 
 class BrokerAgent(Agent):
     num_of_agent = 0
-    def __init__(self, code, _id = None, start_cash = 200000000, security_unit = 1000, target_volume = 500):
-        super().__init__('BROKER', _id, start_cash, security_unit)
+    def __init__(self, code, start_cash = 200000000, security_unit = 1000, target_volume = 500):
+        super().__init__('BROKER', start_cash, security_unit)
         BrokerAgent.add_counter()
 
         # responsible for creating the liquidity of certain security

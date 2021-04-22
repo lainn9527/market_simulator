@@ -5,8 +5,8 @@ from agent import Agent
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id = None, start_cash = 1000000, security_unit = 1000, bid_side = 0.8, trading_time = 10, range_of_price = 0.05, range_of_quantity = 5):
-        super().__init__('ZERO_INTELLIGENCE', _id, start_cash, security_unit)
+    def __init__(self, start_cash = 1000000, security_unit = 1000, bid_side = 0.8, trading_time = 10, range_of_price = 0.01, range_of_quantity = 5):
+        super().__init__('ZERO_INTELLIGENCE', start_cash, security_unit)
         ZeroIntelligenceAgent.add_counter()
 
         self.bid_side = bid_side
@@ -34,13 +34,13 @@ class ZeroIntelligenceAgent(Agent):
                     
     def schedule_auction(self):
         # random a moment to place the order
-        self.wake_up.append(self.current_time + self.timestep_to_time(np.random.randint(1, 1000)))
+        self.wake_up.append(self.current_time + self.timestep_to_time(np.random.randint(1, 10)))
     
     def schedule_continuous_trading(self):
         schedule = np.random.randint(1, self.period_timestep, self.trading_time - 1)
         schedule.sort()
         for item in schedule:
-            self.wake_up.append(self.current_time + self.timestep_to_time(item))
+            self.wake_up.append(self.current_time + self.timestep_to_time(item.item()))
     
     def genertate_order(self):
         no_order_security = [code for code, orders in self.orders.items() if len(orders) == 0 or orders[-1]['finished_time'] != None]
@@ -54,11 +54,12 @@ class ZeroIntelligenceAgent(Agent):
         if np.random.binomial(n = 1, p = 0.8) == 1 or self.holdings[code] == 0:
             bid_or_ask = 'BID'
             quantity = np.random.randint(1, self.range_of_quantity) * self.security_unit
+            best_price = self.current_price('ASK', code, 1)[0]['price']
         else:
             bid_or_ask = 'ASK'
             quantity = self.holdings[code]
+            best_price = self.current_price('BID', code, 1)[0]['price']
         
-        best_price = self.current_price(bid_or_ask, code, 1)[0]['price']
         tick_range = math.floor((best_price * self.range_of_price) / price_info['tick_size'])
         price = np.clip(best_price + price_info['tick_size'] * np.random.randint(-tick_range, tick_range), price_info['low_limit'], price_info['up_limit'])
 

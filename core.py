@@ -3,6 +3,7 @@ import market
 from datetime import datetime, timedelta
 from queue import Queue
 from order import LimitOrder, MarketOrder
+from typing import Dict, List
 class Core:
     '''
         Serve as platform to contain the market and agents.
@@ -15,7 +16,7 @@ class Core:
     def __init__(
         self,
         market: market.Market,
-        agents: [agent.Agent]
+        agents: Dict[str, List]
     ) -> None:
     
         # initialize all things
@@ -23,7 +24,9 @@ class Core:
         self.real_start_time = None
         self.simulated_time = None
         self.randomizer = None
-        self.agents = {agent.unique_id: agent for agent in agents}
+        self.agent_info = {agent_type: len(list_of_agents) for agent_type, list_of_agents in agents.items()}
+        self.agents = {agent.unique_id: agent for list_of_agents in agents.values() for agent in list_of_agents}
+                
         self.market = market
     
     def run(self, num_simulation = 100, num_of_days = 1, time_scale = 0.001):
@@ -35,6 +38,9 @@ class Core:
         self.market.start(self, self.simulated_time, time_scale)
         for _, agent in self.agents.items():
             agent.start(self, self.simulated_time, time_scale, self.market.get_securities())
+        print("Set up the following agents:")
+        for agent_type, num in self.agent_info.items():
+            print(f"   {agent_type}: {num}")
 
         # start to simulate
         open_auction_timestep = int(1800 * pow(time_scale, -1) - 1) # 0800-0900, final order is at 08:59:59.999
