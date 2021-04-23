@@ -23,6 +23,8 @@ class LimitOrder(Order):
 
     def __repr__(self):
         return f"{self.order_id}, {self.bid_or_ask}, {self.price}, {self.quantity}"
+
+
 class MarketOrder(Order):
     def __init__(self, orderer, code, order_type, bid_or_ask, quantity):
         super().__init__(orderer, code, order_type, bid_or_ask, quantity)
