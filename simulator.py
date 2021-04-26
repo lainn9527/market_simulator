@@ -1,7 +1,7 @@
 import argparse
 import numpy as np
 from market import Market
-from zero_intelligence_agent import ZeroIntelligenceAgent
+from agent.zero_intelligence_agent import ZeroIntelligenceAgent
 from core import Core
 
 if __name__ == '__main__':

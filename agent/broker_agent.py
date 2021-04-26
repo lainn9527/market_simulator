@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from agent import Agent
+from .agent import Agent
 
 class BrokerAgent(Agent):
     num_of_agent = 0

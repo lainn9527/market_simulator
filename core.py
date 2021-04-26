@@ -47,6 +47,8 @@ class Core:
             self.market.open_session()
             for timestep in range(num_of_timesteps):
                 self.step()
+
+        return self.market.orderbooks, self.agents
     
     def step(self):
         # agents make desicion

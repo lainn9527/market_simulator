@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from agent import Agent
+from .agent import Agent
 
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0

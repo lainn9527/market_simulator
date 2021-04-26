@@ -356,7 +356,10 @@ class OrderBook:
             self.current_record['open'] = name_val['price']
         self.current_record['price'] = name_val['price']
         self.current_record['high'] = max(self.current_record['high'], name_val['price'])
-        self.current_record['low'] = min(self.current_record['low'], name_val['price'])
+        if 'low' not in self.current_record.keys():
+            self.current_record['low'] = name_val['price']
+        else:
+            self.current_record['low'] = min(self.current_record['low'], name_val['price'])
         self.current_record['volume'] += name_val['volume']
         self.current_record['amount'] += name_val['amount']
 

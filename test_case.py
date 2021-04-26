@@ -1,26 +1,68 @@
 import argparse
-from market import Market
-from zero_intelligence_agent import ZeroIntelligenceAgent
-from broker_agent import BrokerAgent
-from core import Core
+import numpy as np
 from datetime import datetime, timedelta
-
+from core import Core
+from market import Market
+from agent.test_agent import TestAgent
+from order_book import OrderBook
 class TestCase:
-    def test_init(self, core):
-        core.real_start_time = datetime.now()
-        core.simulated_time = datetime.fromisoformat('2021-03-22 08:30:00.000')
+    def __init__(self):
+        random_seed = 9527
+        np.random.seed(random_seed)
+        self.market = Market({'TSMC': 10})
 
-    def test_basic_mechanism(self):
-        market = Market({'TSMC': 300})
+    def test_place_bid_orders(self):
+        price_list = [10.1, 10.15, 10.2, 10.1]
+        quantity_list =  [1, 2, 3, 1]
+        order_list = [{'code': 'TSMC', 'bid_or_ask': 'BID', 'price': price, 'quantity': quantity} for price, quantity in zip(price_list, quantity_list)]
         agents = {
-            'ZeroIntelligenceAgent': [ZeroIntelligenceAgent(start_cash = 10000000) for i in range(1000)],
-            'BrokerAgent': [BrokerAgent('TSMC')]
+            'TestAgent': [TestAgent(order_list = order_list)]
         }
-        core = Core(market, agents)
-        
-        self.test_init(core)
-        core.run(time_scale=1)
+        core = Core(self.market, agents)
+        orderbooks, agents = core.run(num_simulation = 1, num_of_timesteps = 10)
+        tsmc: OrderBook = orderbooks['TSMC']
+        assert tsmc.bids_price == [10.2, 10.15, 10.1, 10]
+        assert tsmc.bids_volume == {10.2: 3, 10.15: 2, 10.1: 2}
+        print(tsmc.bids_orders)
+    
+    def test_place_ask_orders(self):
+        price_list = [10.1, 10.15, 10.2, 10.1]
+        quantity_list =  [1, 2, 3, 1]
+        order_list = [{'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': price, 'quantity': quantity} for price, quantity in zip(price_list, quantity_list)]
+        agents = {
+            'TestAgent': [TestAgent(order_list = order_list)]
+        }
+        core = Core(self.market, agents)
+        orderbooks, agents = core.run(num_simulation = 1, num_of_timesteps = 10)
+        tsmc: OrderBook = orderbooks['TSMC']
+        assert tsmc.asks_price == [10, 10.1, 10.15, 10.2]
+        assert tsmc.asks_volume == {10.2: 3, 10.15: 2, 10.1: 2}
+        print(tsmc.asks_orders)
+
+    def test_match_order(self):
+        bid_order = {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 10.1, 'quantity': 1}
+        ask_order = {'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 10.1, 'quantity': 1}
+        bid_agent = TestAgent([bid_order])
+        ask_agent = TestAgent([ask_order])
+        agents = {'TestAgent': [bid_agent, ask_agent]}
+        core = Core(self.market, agents)
+        orderbooks, agents = core.run(num_simulation = 1, num_of_timesteps = 10)
+        tsmc: OrderBook = orderbooks['TSMC']
+
+    def test_match_orders(self):
+        bid_price_list = [10.1, 10.15, 10.2, 10.1]
+        bid_quantity_list =  [1, 2, 3, 1]
+        ask_price_list = [10.1, 10.15, 10.2, 10.1]
+        ask_quantity_list =  [1, 2, 3, 2]
+        bid_order_list = [{'code': 'TSMC', 'bid_or_ask': 'BID', 'price': price, 'quantity': quantity} for price, quantity in zip(bid_price_list, bid_quantity_list)]
+        ask_order_list = [{'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': price, 'quantity': quantity} for price, quantity in zip(ask_price_list, ask_quantity_list)]
+        bid_agent = TestAgent(bid_order_list)
+        ask_agent = TestAgent(ask_order_list)
+        agents = {'TestAgent': [bid_agent, ask_agent]}
+        core = Core(self.market, agents)
+        orderbooks, agents = core.run(num_simulation = 1, num_of_timesteps = 10)
+        tsmc: OrderBook = orderbooks['TSMC']
 
 if __name__ == '__main__':
-    test = TestCase()
-    test.test_basic_mechanism()
+    testcase = TestCase()
+    testcase.test_match_orders()
