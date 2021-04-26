@@ -4,18 +4,15 @@ from agent import Agent
 
 class BrokerAgent(Agent):
     num_of_agent = 0
-    def __init__(self, code, start_cash = 200000000, security_unit = 1000, target_volume = 500):
-        super().__init__('BROKER', start_cash, security_unit)
+    def __init__(self, code, start_cash = 200000000, target_volume = 500):
+        super().__init__('BROKER', start_cash)
         BrokerAgent.add_counter()
 
         # responsible for creating the liquidity of certain security
         self.code = code
-        self.target_volume = target_volume * security_unit
+        self.target_volume = target_volume
         self.price_index = {}
     
-    def start(self, core, start_time, time_scale, securities):
-        super().start(core, start_time, time_scale, securities)
-        self.holdings[self.code] = self.target_volume
     
     def step(self):
         super().step()
@@ -40,7 +37,3 @@ class BrokerAgent(Agent):
                 else:
                     self.place_order('auction', self.code, 'ASK', self.target_volume - placed_volumn, price)
                     break
-
-
-    def schedule_continuous_trading(self):
-        pass

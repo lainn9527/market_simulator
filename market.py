@@ -12,7 +12,9 @@ class Market:
         self.core = core
     
     def step(self):
-        pass
+        for orderbook in self.orderbooks.values():
+            orderbook.step_summarize()
+        
         
     def open_session(self):
         # determine the price list of orderbook
@@ -20,7 +22,7 @@ class Market:
             orderbook.set_price()
 
         # notify agents
-        msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents')
+        msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', None)
         self.announce_message(msg)
         self.is_trading = True
 
@@ -74,44 +76,46 @@ class Market:
     def get_order_record(self, code, order_id):
         return self.orderbooks[code].orders[order_id]
 
-    def get_orderbook(self, code):
-        if code not in self.orderbooks.keys():
-            raise Exception
-        return self.orderbooks[code]
+    def get_current_price(self, code):
+        return self.orderbooks[code].current_record['price']
+
+    def get_records(self, step = 1):
+        return self.orderbooks[code].steps_record[:-1*(step+1):-1]
+
+    def get_best_bids(self, code, number = 1):
+        return [{'price': price, 'volume': self.orderbooks[code].bids_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
 
     def get_best_asks(self, code, number = 1):
         return [{'price': price, 'volume': self.orderbooks[code].asks_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
     
-    def get_best_bids(self, code, number = 1):
-        return [{'price': price, 'volume': self.orderbooks[code].bids_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
-    
+    def get_tick_size(self, code):
+        return self.orderbooks[code].tick_size
+
     def get_securities(self):
         return list(self.orderbooks.keys())
-
-    def get_price_info(self, code):
-        return self.orderbooks[code].price_info
 
     def get_time(self):
         return self.core.timestep
 
     def market_stats(self):
-        amount = 0
-        volume = 0
+        stats = {}
         for code, orderbook in self.orderbooks.items():
-            amount = orderbook.stats['amount']
-            volume = orderbook.stats['volume']
-        return {'amount': amount, 'volume': volume}
+            amount = orderbook.steps_record[-1]['volume']
+            volume = orderbook.steps_record[-1]['amount']
+            average_price = orderbook.steps_record[-1]['average']
+            stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume}
+        return stats
 
-    def determine_tick_size(self):
-        if self.value < 10:
+    def determine_tick_size(self, base_price):
+        if base_price < 10:
             return 0.01
-        elif self.value < 50:
+        elif base_price < 50:
             return 0.05
-        elif self.value < 100:
+        elif base_price < 100:
             return 0.1
-        elif self.value < 500:
+        elif base_price < 500:
             return 0.5
-        elif self.value < 1000:
+        elif base_price < 1000:
             return 1
         else:
             return 5

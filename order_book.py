@@ -55,7 +55,7 @@ class OrderBook:
 
         self.num_of_order = 0
 
-        self.current_record: Dict = dict() # OHLCVA
+        self.current_record: Dict = defaultdict(float) # OHLCVA
         self.steps_record: List[Dict] = list()  # OHLCVA
 
 
@@ -71,9 +71,10 @@ class OrderBook:
         tick_size = self.market.determine_tick_size(base_price)
         self.bids_price.append(base_price)
         self.asks_price.append(base_price)
-        
         # point to the base price
         self.tick_size = tick_size
+
+        self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
 
 
 
@@ -94,6 +95,8 @@ class OrderBook:
         order_id = self._generate_order_id()
         order.order_id = order_id
         time = self.market.get_time()
+        # check price
+        order.price = round(order.price, 2)
 
         # add the order to the orderbook
         self.orders[order_id] = OrderRecord(order, time, None, [], 0, 0, False)
@@ -104,7 +107,7 @@ class OrderBook:
         if order.bid_or_ask == "BID":
             return self.handle_bid_order(order_id)
         elif order.bid_or_ask == "ASK":
-            return self.handle_ask_order(ordorder_ider)
+            return self.handle_ask_order(order_id)
 
     
     def handle_bid_order(self, order_id):
@@ -113,11 +116,12 @@ class OrderBook:
         remain_quantity = order.quantity
         transaction_amount = 0
         transaction_quantity = 0
-        
+
+        # check liquidity
+
         # match the order if bid price is the best and >= the best ask price
-        if order.price > self.bids_price[0] and order.price >= self.asks_price[0]:
+        if (len(self.bids_price) == 0 or order.price > self.bids_price[0] ) and len(self.asks_price) > 0:
             transaction_quantity, transaction_amount, last_price = self.match_bid_order(order.price, order.quantity)
-            
         if transaction_quantity > 0:
             # if there is any match, fill the limit order
             self.fill_order(order_id, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
@@ -156,10 +160,9 @@ class OrderBook:
                 last_price = best_ask_price
                 transaction_quantity += matched_quantity
                 transaction_amount += matched_quantity * best_ask_price
-                matched_order_record.filled_quantity += matched_quantity
-                self.asks_volume[best_ask_price][0] -= matched_quantity
                 remain_quantity -= matched_quantity
 
+                self.asks_volume[best_ask_price] -= matched_quantity
                 if matched_order_record.filled_quantity == matched_order_record.order.quantity:
                     self.asks_orders[best_ask_price].pop(0)
 
@@ -169,6 +172,8 @@ class OrderBook:
             # check if best bid/ask needs to be updated
             if self.asks_volume[best_ask_price] == 0:
                 self.asks_price.pop(0)
+                if len(self.asks_price) == 0:
+                    break
             best_ask_price = self.asks_price[0]
 
         return transaction_quantity, transaction_amount, last_price
@@ -177,18 +182,20 @@ class OrderBook:
         order_record = self.orders[order_id]
         price = order_record.order.price
         quantity = order_record.order.quantity - order_record.filled_quantity
-        for i in range(len(self.bids_price)):
-            if price > self.bids_price[i]:
-                self.bids_price.insert(i, price)
-            elif price == self.bids_price[i]:
-                break
-        if self.bids_price[i] != price:
+        if len(self.bids_price) == 0 or price < self.bids_price[-1]:
             self.bids_price.append(price)
+        else:
+            for i in range(len(self.bids_price)):
+                if price > self.bids_price[i]:
+                    self.bids_price.insert(i, price)
+                    break
+                elif price == self.bids_price[i]:
+                    break
         self.bids_orders[price].append(order_id)
         self.bids_volume[price] += quantity
 
         
-    def handle_ask_order(self, order):
+    def handle_ask_order(self, order_id):
         order = self.orders[order_id].order
 
         remain_quantity = order.quantity
@@ -196,7 +203,7 @@ class OrderBook:
         transaction_quantity = 0
         
         # match the order if bid price is the best and >= the best ask price
-        if order.price > self.asks_price[0] and order.price >= self.bids_price[0]:
+        if (len(self.asks_price) == 0 or order.price > self.asks_price[0] )and len(self.bids_price) > 0:
             transaction_quantity, transaction_amount, last_price = self.match_ask_order(order.price, order.quantity)
             
         if transaction_quantity > 0:
@@ -210,7 +217,7 @@ class OrderBook:
             self.update_record(**to_update)
         # update bid/ask if the limit order is partially filled and placed order
         if transaction_quantity != order.quantity:
-            self.add_order(order_id, order.bid_or_ask, order.price, order.quantity - transaction_quantity)
+            self.quote_ask_order(order_id)
 
     def match_ask_order(self, price, quantity):
         remain_quantity = quantity
@@ -234,10 +241,9 @@ class OrderBook:
                 last_price = best_bid_price
                 transaction_quantity += matched_quantity
                 transaction_amount += matched_quantity * best_bid_price
-                matched_order_record.filled_quantity += matched_quantity
-                self.bids_volume[best_bid_price][0] -= matched_quantity
                 remain_quantity -= matched_quantity
 
+                self.bids_volume[best_bid_price] -= matched_quantity
                 if matched_order_record.filled_quantity == matched_order_record.order.quantity:
                     self.bids_orders[best_bid_price].pop(0)
 
@@ -247,20 +253,24 @@ class OrderBook:
             # check if best bid needs to be updated
             if self.bids_volume[best_bid_price] == 0:
                 self.bids_price.pop(0)
+                if len(self.bids_price) == 0:
+                    break
             best_bid_price = self.bids_price[0]
         return transaction_quantity, transaction_amount, last_price
 
-    def quote_bid_order(self, order_id):
+    def quote_ask_order(self, order_id):
         order_record = self.orders[order_id]
         price = order_record.order.price
         quantity = order_record.order.quantity - order_record.filled_quantity
-        for i in range(len(self.asks_price)):
-            if price < self.asks_price[i]:
-                self.asks_price.insert(i, price)
-            elif price == self.asks_price[i]:
-                break
-        if self.asks_price[i] != price:
+        if len(self.asks_price) == 0 or price > self.asks_price[-1]:
             self.asks_price.append(price)
+        else:
+            for i in range(len(self.asks_price)):
+                if price < self.asks_price[i]:
+                    self.asks_price.insert(i, price)
+                    break
+                elif price == self.asks_price[i]:
+                    break
         self.asks_orders[price].append(order_id)
         self.asks_volume[price] += quantity
 
@@ -318,11 +328,11 @@ class OrderBook:
         order_record.filled_amount += price * quantity
         # send message of transactions
         self.market.send_message(
-            Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {'code': order_record.order.code, 'bid_or_ask': order_record.order.bid_or_ask, 'price': price, 'quantity': quantity}),
+            Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {'code': order_record.order.code, 'order_id': order_id, 'bid_or_ask': order_record.order.bid_or_ask, 'price': price, 'quantity': quantity}),
         )
 
         # check if this order is finished
-        if order_record.filled_quantity == order_record.order['quantity']:
+        if order_record.filled_quantity == order_record.order.quantity:
             order_record.finished_time = time
             # send message of finishing order
             self.market.send_message(
@@ -340,40 +350,24 @@ class OrderBook:
         return self.orders[order_id]
 
 
-    def get_stats(self):
-        return self.stats        
-
-
-    def daily_summarize(self):
-        # clear unfinished orders
-        for order_id, order in self.orders.items():
-            # notify the orderer the invalidation of the unfinished order
-            if order['state'] == False:
-                self.market.send_message(
-                    Message('AGENT', 'ORDER_INVALIDED', 'market', order['order'].orderer, {'code': order['order'].code, 'order_id': order['order'].order_id}),
-                    self.market.get_time()
-                )
-
-        daily_summarization = {
-            'date': self.market.get_time().date().isoformat(),
-            'order': self.orders,
-            'bid': self.bids,
-            'ask': self.asks,
-            'stats': self.stats
-        }
-
-        self.history.append(daily_summarization)
-        self.reset()
-        return daily_summarization['stats']
-
-
     def update_record(self, **name_val):
         # OHLCVA
+        if 'open' not in self.current_record.keys():
+            self.current_record['open'] = name_val['price']
+        self.current_record['price'] = name_val['price']
         self.current_record['high'] = max(self.current_record['high'], name_val['price'])
         self.current_record['low'] = min(self.current_record['low'], name_val['price'])
         self.current_record['volume'] += name_val['volume']
         self.current_record['amount'] += name_val['amount']
 
+    def step_summarize(self):
+        self.current_record['close'] = self.current_record.pop('price')
+        self.current_record['average'] = round(self.current_record['amount']/(self.current_record['volume'] + 1e-6), 2)
+        self.current_record['amount'] = round(self.current_record['amount'], 2)
+        self.steps_record.append(self.current_record)
+        self.current_record = defaultdict(float)
+        self.update_record(**{'price': self.steps_record[-1]['close'], 'volume': 0, 'amount': 0})
+    
 
     def _generate_order_id(self):
         self.num_of_order += 1

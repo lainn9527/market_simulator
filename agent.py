@@ -5,11 +5,10 @@ from datetime import datetime, timedelta, time
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _type, start_cash = 10000000, security_unit = 1000):
+    def __init__(self, _type, start_cash = 10000000):
         Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
-        self.security_unit = security_unit
         self.unique_id = f"agent_{self.type}_{self.get_counter()}"
         self.core = None
         
@@ -19,6 +18,7 @@ class Agent:
         orders: {security code: [order_id] }
         holdings: {security code: volume}
         '''
+        self.security_list = []
         self.holdings = {'CASH': start_cash}
         self.orders = {}
         self.orders_history = {}
@@ -29,7 +29,7 @@ class Agent:
     
     def start(self, core, securities):
         self.core = core
-        self.holdings.update({code: 0 for code in securities})
+        self.security_list = securities
         self.orders.update({code: [] for code in securities})
         self.orders_history.update({code: [] for code in securities})
         # ready to go
@@ -64,9 +64,8 @@ class Agent:
                 self.holdings[message.content['code']] += message.content['quantity']
                 self.holdings['CASH'] += (order_record.order.price - message.content['price']) * message.content['quantity']
             
-            elif message.content['bid_or_ask'] == 'ASK':
-                self.holdings['CASH'] += message.content['price'] * message.content['quantity']
-            
+            elif order_record.order.bid_or_ask == 'ASK':
+                self.holdings['CASH'] += message.content['price'] * message.content['quantity']            
             
             self.log_event('ORDER_FILLED', {'price': message.content['price'], 'quantity': message.content['quantity']})
 
@@ -74,10 +73,10 @@ class Agent:
         elif message.subject == 'ORDER_FINISHED':
             for i, order_id in enumerate(self.orders[message.content['code']]):
                 if order_id == message.content['order_id']:
-                    finished_order_id = self.orders[message.content['code']].pop(i)
-            self.orders_history[message.content['code']].append(finished_order_id)
-            
-            self.log_event('ORDER_FINISHED', self.orders[message.content['code']][message.content['order_id']])
+                    self.orders[message.content['code']].pop(i)
+            self.orders_history[message.content['code']].append(message.content['order_id'])
+
+            self.log_event('ORDER_FINISHED', {'order_record': self.core.get_order_record(code = message.content['code'] , order_id = message.content['order_id'])} )
         
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -117,8 +116,6 @@ class Agent:
     def cancel_order(self):
         pass
 
-    def current_price(self, bid_or_ask, code, number):
-        return self.core.best_bids(code, number) if bid_or_ask == 'BID' else self.core.best_asks(code, number)
 
     def log_event(self, event_type, event):
         # print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
@@ -146,7 +143,3 @@ class Agent:
     
     def handle_close(self):
         pass
-
-    def get_order(self):
-        pass
-    
