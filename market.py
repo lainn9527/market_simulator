@@ -2,19 +2,20 @@ from order_book import OrderBook
 from message import Message
 from order import LimitOrder, MarketOrder
 from datetime import time, timedelta
+
 class Market:
-    def __init__(self, security_values):
-        self.orderbooks = {code: OrderBook(self, code, value) for code, value in security_values.items()}
-        self.core = None
+    def __init__(self, core, config):
+        self.config = config
+        self.orderbooks = None
+        self.core = core
         self.is_trading = False
 
-    def start(self, core):
-        self.core = core
-    
+    def start(self):
+        self.orderbooks = {code: OrderBook(self, code, value['value']) for code, value in self.config['Securities'].items()}
+
     def step(self):
         for orderbook in self.orderbooks.values():
-            orderbook.step_summarize()
-        
+            orderbook.step_summarize()        
         
     def open_session(self):
         # determine the price list of orderbook

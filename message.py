@@ -13,3 +13,6 @@ class Message:
     @property
     def postcodes(self):
         return ['ALL_AGENTS', 'AGENT', 'MARKET']
+
+    def __str__(self):
+        return f"{self.sender}-> {self.receiver}: {self.subject}, {self.content}"

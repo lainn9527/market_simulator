@@ -1,0 +1,34 @@
+{
+    "Market":{
+        "Securities": {
+            "TSMC": {
+                "value": 100
+            }
+        }
+    },
+
+    "Agent": {
+        "Global": {
+            "cash": 10000000,
+            "securities": {
+                "TSMC": 100
+            }
+        },
+        "ZeroIntelligenceAgent": [
+            {
+                "number": 10,
+                "bid_side": 0.5,
+                "range_of_price": 5,
+                "range_of_quantity": 5
+            }
+        ],
+        
+        "ChartistAgent": [
+
+        ],
+
+        "FundamentalistAgent":[
+
+        ]
+    }
+}

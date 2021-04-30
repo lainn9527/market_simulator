@@ -1,9 +1,10 @@
 import agent
-import market
+from market import Market
 from datetime import datetime, timedelta
 from queue import Queue
 from order import LimitOrder, MarketOrder
 from typing import Dict, List
+from agent_manager import AgentManager
 class Core:
     '''
     Serve as platform to contain the market and agents.
@@ -15,8 +16,7 @@ class Core:
     '''
     def __init__(
         self,
-        market: market.Market,
-        agents: Dict[str, List]
+        config: Dict
     ) -> None:
     
         # initialize all things
@@ -24,22 +24,18 @@ class Core:
         self.start_time = None
         self.timestep = None
         self.random_seed = None
-        self.agent_info = {agent_type: len(list_of_agents) for agent_type, list_of_agents in agents.items()}
-        self.agents = {agent.unique_id: agent for list_of_agents in agents.values() for agent in list_of_agents}
-        self.market = market
+        self.agent_manager = AgentManager(self, config['Agent'])
+        self.market = Market(self, config['Market'])
     
     def run(self, num_simulation = 100, num_of_timesteps = 100000, random_seed = 9527):
         # time
         self.start_time = datetime.now()
         self.random_seed = random_seed
         # register the core for the market and agents
-        self.market.start(self)
-        for agent in self.agents.values():
-            agent.start(self, self.market.get_securities())
+        self.market.start()
+        self.agent_manager.start(self.market.get_securities())
 
         print("Set up the following agents:")
-        for agent_type, num in self.agent_info.items():
-            print(f"   {agent_type}: {num}")
 
         # start to simulate
         for i in range(num_simulation):
@@ -48,13 +44,12 @@ class Core:
             for timestep in range(num_of_timesteps):
                 self.step()
 
-        return self.market.orderbooks, self.agents
+        return self.market.orderbooks, self.agent_manager
     
     def step(self):
         # agents make desicion
         # TODO: use agent manager!!!!!
-        for agent in self.agents.values():
-            agent.step()
+        self.agent_manager.step()
 
         # check the message queue and execute the actions from agents on the market
         self.handle_messages()
@@ -63,8 +58,9 @@ class Core:
         # add timestep
         self.timestep += 1
 
+        print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
         if self.timestep % 100 == 0:
-            print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}")
+            print(f"==========={self.timestep}===========\n")
 
 
     def send_message(self, message):
@@ -88,17 +84,12 @@ class Core:
                 self.market.receive_message(message)
             else:
                 raise Exception('Postcode {message.postcode} and receiver {message.receiver} don\'t match')
-
-        elif message.postcode == 'AGENT':
+        elif message.postcode == 'AGENT' or message.postcode == 'ALL_AGENTS':
             # check if agent exist:
-            self.agents[message.receiver].receive_message(message)
-            
-        elif message.postcode == 'ALL_AGENTS':
-            for _, agent in self.agents.items():
-                agent.receive_message(message)
-
+            self.agent_manager.receive_message(message)
         else:
             raise Exception
+        print(message)
     
     def get_order_record(self, code, order_id):
         return self.market.get_order_record(code, order_id)

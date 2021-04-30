@@ -108,7 +108,6 @@ class OrderBook:
             return self.handle_bid_order(order_id)
         elif order.bid_or_ask == "ASK":
             return self.handle_ask_order(order_id)
-
     
     def handle_bid_order(self, order_id):
         order = self.orders[order_id].order
@@ -118,7 +117,6 @@ class OrderBook:
         transaction_quantity = 0
 
         # check liquidity
-
         # match the order if bid price is the best and >= the best ask price
         if (len(self.bids_price) == 0 or order.price > self.bids_price[0] ) and len(self.asks_price) > 0:
             transaction_quantity, transaction_amount, last_price = self.match_bid_order(order.price, order.quantity)
@@ -134,7 +132,8 @@ class OrderBook:
         # update bid/ask if the limit order is partially filled and placed order
         if transaction_quantity != order.quantity:
             self.quote_bid_order(order_id)
-        
+
+
     
 
 
@@ -144,7 +143,7 @@ class OrderBook:
         transaction_amount = 0
         last_price = -1
         best_ask_price = self.asks_price[0]
-
+        self.check_spread()
         while remain_quantity > 0 and price >= best_ask_price:
             while len(self.asks_orders[best_ask_price]) != 0:
                 matched_order_id = self.asks_orders[best_ask_price][0]
@@ -176,6 +175,7 @@ class OrderBook:
                     break
             best_ask_price = self.asks_price[0]
 
+        self.check_spread()
         return transaction_quantity, transaction_amount, last_price
     
     def quote_bid_order(self, order_id):
@@ -201,9 +201,8 @@ class OrderBook:
         remain_quantity = order.quantity
         transaction_amount = 0
         transaction_quantity = 0
-        
         # match the order if bid price is the best and >= the best ask price
-        if (len(self.asks_price) == 0 or order.price > self.asks_price[0] )and len(self.bids_price) > 0:
+        if (len(self.asks_price) == 0 or order.price < self.asks_price[0] )and len(self.bids_price) > 0:
             transaction_quantity, transaction_amount, last_price = self.match_ask_order(order.price, order.quantity)
             
         if transaction_quantity > 0:
@@ -225,7 +224,7 @@ class OrderBook:
         transaction_amount = 0
         last_price = -1
         best_bid_price = self.bids_price[0]
-    
+        self.check_spread()
         while remain_quantity > 0 and price <= best_bid_price:
             while len(self.bids_orders[best_bid_price]) != 0:
                 matched_order_id = self.bids_orders[best_bid_price][0]
@@ -256,6 +255,8 @@ class OrderBook:
                 if len(self.bids_price) == 0:
                     break
             best_bid_price = self.bids_price[0]
+        
+        self.check_spread()
         return transaction_quantity, transaction_amount, last_price
 
     def quote_ask_order(self, order_id):
@@ -338,6 +339,7 @@ class OrderBook:
             self.market.send_message(
                 Message('AGENT', 'ORDER_FINISHED', 'market', order_record.order.orderer, {'code': order_record.order.code, 'order_id': order_record.order.order_id})
             )
+        self.check_spread()
             
     def cancel_order(self):
         pass
@@ -371,6 +373,11 @@ class OrderBook:
         self.current_record = defaultdict(float)
         self.update_record(**{'price': self.steps_record[-1]['close'], 'volume': 0, 'amount': 0})
     
+    def check_spread(self):
+        if len(self.bids_price) <= 1 or len(self.asks_price) <= 0:
+            return
+        if self.bids_price[0] >= self.asks_price[0]:
+            print("for break")            
 
     def _generate_order_id(self):
         self.num_of_order += 1

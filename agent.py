@@ -11,7 +11,7 @@ class Agent:
         Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
-        self.unique_id = f"agent_{self.type}_{self.get_counter()}"
+        self.unique_id = f"{self.type}_{self.get_counter()}"
         self.core = None
         
         
@@ -188,9 +188,11 @@ class ZeroIntelligenceAgent(Agent):
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
 
+        # TODO: best bid and best ask
         if np.random.binomial(n = 1, p = 0.5) == 1 or self.holdings[code] == 0:
             bid_or_ask = 'BID'
-            price = round(current_price + np.random.randint(1, self.range_of_price) * tick_size, 2) 
+            # lowest_ask = self.core.
+            price = round(current_price + np.random.randint(1, self.range_of_price) * tick_size, 2)
             self.place_limit_bid_order(code, quantity, price)
         else:
             bid_or_ask = 'ASK'
