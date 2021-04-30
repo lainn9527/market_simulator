@@ -365,7 +365,7 @@ class OrderBook:
 
     def step_summarize(self):
         self.current_record['close'] = self.current_record.pop('price')
-        self.current_record['average'] = round(self.current_record['amount']/(self.current_record['volume'] + 1e-6), 2)
+        self.current_record['average'] = round(self.current_record['amount']/(self.current_record['volume'] + 1e-6), 2) if self.current_record['amount'] != 0 else self.current_record['close']
         self.current_record['amount'] = round(self.current_record['amount'], 2)
         self.steps_record.append(self.current_record)
         self.current_record = defaultdict(float)

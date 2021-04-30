@@ -1,3 +1,5 @@
+import math
+import numpy as np
 from message import Message
 from order import LimitOrder, MarketOrder
 from datetime import datetime, timedelta, time
@@ -143,3 +145,102 @@ class Agent:
     
     def handle_close(self):
         pass
+
+class TestAgent(Agent):
+    num_of_agent = 0
+    
+    def __init__(self, order_list, start_cash = 1000000, start_securities = {'TSMC': 100}):
+        super().__init__('TEST', start_cash)
+        TestAgent.add_counter()
+        self.holdings.update(start_securities)
+        self.order_list = order_list
+
+    def step(self):
+        super().step()
+        # to trade?
+        if len(self.order_list) != 0:
+            order = self.order_list.pop(0)
+            if order['bid_or_ask'] == 'BID':
+                self.place_limit_bid_order(order['code'], order['quantity'], order['price'])
+            else:
+                self.place_limit_ask_order(order['code'], order['quantity'], order['price'])
+
+class ZeroIntelligenceAgent(Agent):
+    num_of_agent = 0
+    
+    def __init__(self, start_cash = 1000000, start_securities = None, bid_side = 0.8, range_of_price = 5, range_of_quantity = 5):
+        super().__init__('ZERO_INTELLIGENCE', start_cash)
+        ZeroIntelligenceAgent.add_counter()
+        self.holdings.update(start_securities)
+        self.range_of_quantity = range_of_quantity
+        self.range_of_price = range_of_price
+
+    def step(self):
+        super().step()
+        # to trade?
+        if np.random.binomial(n = 1, p = 0.01) == 1:
+            self.generate_order()
+
+    def generate_order(self):
+        # which one?
+        code = np.random.choice(self.security_list)
+        current_price = self.core.get_current_price(code)
+        quantity = np.random.randint(1, self.range_of_quantity)
+        tick_size = self.core.get_tick_size(code)
+
+        if np.random.binomial(n = 1, p = 0.5) == 1 or self.holdings[code] == 0:
+            bid_or_ask = 'BID'
+            price = round(current_price + np.random.randint(1, self.range_of_price) * tick_size, 2) 
+            self.place_limit_bid_order(code, quantity, price)
+        else:
+            bid_or_ask = 'ASK'
+            price = round(current_price - np.random.randint(1, self.range_of_price) * tick_size, 2)
+            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+        # if existed, modify the order
+        # if len(self.orders[code]) != 0:
+            # pass
+
+class ChartistAgent(Agent):
+    num_of_agent = 0
+    def __init__(self, start_cash = 100000):
+        super().__init__('ChartistAgent', start_cash)
+    
+
+class FundamentalistAgent(Agent):
+    pass
+
+class BrokerAgent(Agent):
+    num_of_agent = 0
+    def __init__(self, code, start_cash = 200000000, target_volume = 500):
+        super().__init__('BROKER', start_cash)
+        BrokerAgent.add_counter()
+
+        # responsible for creating the liquidity of certain security
+        self.code = code
+        self.target_volume = target_volume
+        self.price_index = {}
+    
+    
+    def step(self):
+        super().step()
+    
+
+    def schedule_auction(self):
+        # provide liquidity when open session
+        if self.code not in self.holdings.keys():
+            raise Exception
+        if self.is_open_auction == True and self.is_trading == True:
+            best_ask = self.current_price("ASK", self.code, 1)[0]['price']
+            price_info = self.core.get_price_info(self.code)
+            price_list = [best_ask + price_info['tick_size'] * i for i in range(-5, 5)]
+            placed_volumn = 0
+            order_counter = 0
+            for price in price_list:
+                volumn = (np.random.randint(self.target_volume // 20, self.target_volume // 10) // 1000) * 1000
+                self.price_index[price] = order_counter
+                order_counter += 1
+                if placed_volumn <= self.target_volume:
+                    self.place_order('auction', self.code, 'ASK', volumn, price)
+                else:
+                    self.place_order('auction', self.code, 'ASK', self.target_volume - placed_volumn, price)
+                    break
