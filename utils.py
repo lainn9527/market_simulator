@@ -38,11 +38,11 @@ def write_records(orderbooks: Dict, all_agents: Dict, output_dir: Path):
         with open(file_path, 'w') as fp:
             json.dump(stats, fp, indent=4)
     
-    # agents_stats = {}
-    # for _type, agents in all_agents.items():
-    #     stats = {key: [] for key in agents.holdings.keys()}
-    #     for agent in agents:
-    #         pass
+    agents_stats = {}
+    for _type, agents in all_agents.items():
+        stats = {key: [] for key in agents.holdings.keys()}
+        for agent in agents:
+            pass
 
     
     
