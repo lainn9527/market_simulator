@@ -143,7 +143,6 @@ class OrderBook:
         transaction_amount = 0
         last_price = -1
         best_ask_price = self.asks_price[0]
-        self.check_spread()
         while remain_quantity > 0 and price >= best_ask_price:
             while len(self.asks_orders[best_ask_price]) != 0:
                 matched_order_id = self.asks_orders[best_ask_price][0]
@@ -175,7 +174,6 @@ class OrderBook:
                     break
             best_ask_price = self.asks_price[0]
 
-        self.check_spread()
         return transaction_quantity, transaction_amount, last_price
     
     def quote_bid_order(self, order_id):
@@ -224,7 +222,6 @@ class OrderBook:
         transaction_amount = 0
         last_price = -1
         best_bid_price = self.bids_price[0]
-        self.check_spread()
         while remain_quantity > 0 and price <= best_bid_price:
             while len(self.bids_orders[best_bid_price]) != 0:
                 matched_order_id = self.bids_orders[best_bid_price][0]
@@ -256,7 +253,6 @@ class OrderBook:
                     break
             best_bid_price = self.bids_price[0]
         
-        self.check_spread()
         return transaction_quantity, transaction_amount, last_price
 
     def quote_ask_order(self, order_id):

@@ -3,6 +3,8 @@ from pathlib import Path
 from dataclasses import dataclass
 from order import Order
 from typing import List, Dict
+from agent_manager import AgentManager
+from collections import defaultdict
 @dataclass
 class TransactionRecord:
     time: int
@@ -20,29 +22,33 @@ class OrderRecord:
     filled_amount: float
     cancellation: bool
 
-def write_records(orderbooks: Dict, all_agents: Dict, output_dir: Path):
+def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Path):
     output_dir = Path('./result/')
     if not output_dir.exists():
         output_dir.mkdir()
     # OHLCVM
-    orderbook_stats = {}
     for code, orderbook in orderbooks.items():
-        stats = {key: [] for key in orderbook.steps_record[0].keys()}
+        stats = defaultdict(list)
         for record in orderbook.steps_record:
             for k, v in record.items():
                 stats[k].append(v)
-        orderbook_stats[code] = stats
-    
-    for code, stats in orderbook_stats.items():
+        
         file_path = output_dir / f"{code}.json"
         with open(file_path, 'w') as fp:
             json.dump(stats, fp, indent=4)
     
-    # agents_stats = {}
-    # for _type, agents in all_agents.items():
-    #     stats = {key: [] for key in agents.holdings.keys()}
-    #     for agent in agents:
-    #         pass
+
+    
+    agents_stats = defaultdict(list)
+    for record in agent_manager.step_records:
+        for group_name, holdings in record.items():
+            for code, value in holdings.items():
+                agents_stats[f"{group_name}_{code}"].append(value)
+        
+    
+    file_path = output_dir / "agent.json"
+    with open(file_path, 'w') as fp:
+        json.dump(agents_stats, fp, indent=4)
 
     
     
