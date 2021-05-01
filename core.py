@@ -89,13 +89,16 @@ class Core:
             self.agent_manager.receive_message(message)
         else:
             raise Exception
-        print(message)
+        # print(message)
     
     def get_order_record(self, code, order_id):
         return self.market.get_order_record(code, order_id)
 
     def get_current_price(self, code):
         return self.market.get_current_price(code)
+
+    def get_records(self, code, _type, step = 1):
+        return self.market.get_records(code, _type, step)
 
     def get_best_bids(self, code, number):
         return self.market.get_best_bids(code, number)

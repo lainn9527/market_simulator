@@ -28,14 +28,9 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
         output_dir.mkdir()
     # OHLCVM
     for code, orderbook in orderbooks.items():
-        stats = defaultdict(list)
-        for record in orderbook.steps_record:
-            for k, v in record.items():
-                stats[k].append(v)
-        
         file_path = output_dir / f"{code}.json"
         with open(file_path, 'w') as fp:
-            json.dump(stats, fp, indent=4)
+            json.dump(orderbook.steps_record, fp, indent=4)
     
 
     

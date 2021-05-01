@@ -1,4 +1,5 @@
 import agent
+import random
 from typing import Dict, List
 from collections import defaultdict
 class AgentManager:
@@ -69,7 +70,21 @@ class AgentManager:
                 self.group_agent[group_name].append(new_agent.unique_id)
     
     def build_ch(self, groups):
-        pass
+        group_conuter = 1
+        for group in groups:
+            group_name = f"ch_{group_conuter}"
+            self.group_agent[group_name] = []
+            securities = {code: 0 for code in self.securities_list}
+            holdings = self.global_config['securities'] if 'securities' not in group.keys() else group['securities']
+            securities.update(holdings)
+
+            for i in range(group['number']):
+                group['risk_preference']
+                new_agent = agent.ChartistAgent(start_cash = self.global_config['cash'],
+                                                start_securities = securities,
+                                                risk_preference = group['risk_preference'])
+                self.agents[new_agent.unique_id] = new_agent
+                self.group_agent[group_name].append(new_agent.unique_id)
             
     def type_abbreviation(self, _type):
         if _type == "ZeroIntelligenceAgent":

@@ -1,9 +1,10 @@
 import math
 import numpy as np
+import talib
 from message import Message
 from order import LimitOrder, MarketOrder
 from datetime import datetime, timedelta, time
-
+from typing import Dict, List
 class Agent:
     num_of_agent = 0
 
@@ -82,9 +83,13 @@ class Agent:
             raise Exception(f"Invalid subject for agent {self.unique_id}")
 
     def place_limit_bid_order(self, code, volume, price):
+        if volume == 0:
+            return
+        
         cost = volume * price
         if cost > self.cash:
-            raise Exception("Not enough money")
+            return
+
         self.cash -= cost
         order = LimitOrder(self.unique_id, code, 'LIMIT', 'BID', volume, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
@@ -92,6 +97,9 @@ class Agent:
         self.core.send_message(msg)
 
     def place_limit_ask_order(self, code, volume, price):
+        if volume == 0:
+            return
+
         if volume > self.holdings[code]:
             raise Exception(f"Not enough {code} shares")
         self.holdings[code] -= volume
@@ -198,8 +206,54 @@ class ZeroIntelligenceAgent(Agent):
 
 class ChartistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, start_cash = 100000):
-        super().__init__('ChartistAgent', start_cash)
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, strategy = None, risk_preference = 1):
+        super().__init__('ChartistAgent', start_cash, start_securities)
+        ChartistAgent.add_counter()
+        self.strategy = strategy
+        self.risk_preference = risk_preference
+        self.cool_down = 0
+
+    def step(self):
+        if self.cool_down > 0:
+            self.cool_down -= 1
+            return
+        default_cool_down = np.random.randint(500, 1000)
+        default_bid_signal = 1.05
+        default_ask_signal = 0.95
+
+        code = "TSMC"
+        price_list = self.core.get_records(code = code, _type = 'average', step = 100)
+        if len(price_list) < 100:
+            return
+        
+        if self.sma(price_list[:10]) / self.sma(price_list[:30]) >= 1.05:
+            if np.random.binomial(n = 1, p = 0.5 * self.risk_preference) == 1:
+                self.generate_bid_order(code, amount = 0.1 * self.cash)
+            self.cool_down = round(default_cool_down / self.risk_preference)
+        
+        elif self.sma(price_list[:10]) / self.sma(price_list[:30]) <= 0.95:
+            if np.random.binomial(n = 1, p = 0.5 / self.risk_preference) == 1:
+                self.generate_ask_order(code, quantity = round(0.3 * self.holdings[code]))
+            self.cool_down = round(default_cool_down / self.risk_preference)
+            
+    def generate_bid_order(self, code, amount):
+        tick_size = self.core.get_tick_size(code)
+        price = round(self.core.get_current_price(code) + 2 * tick_size, 2)
+        quantity = amount // price
+        self.place_limit_bid_order(code, volume = quantity, price = price)
+        
+    def generate_ask_order(self, code, quantity):
+        tick_size = self.core.get_tick_size(code)
+        price = round(self.core.get_current_price(code) - 2 * tick_size, 2)
+        self.place_limit_ask_order(code, volume = quantity, price = price)
+
+    def sma(self, price_list):
+        return sum(price_list) / len(price_list)
+
+    def ema(self):
+        pass
+    def macd(self):
+        pass
     
 
 class FundamentalistAgent(Agent):

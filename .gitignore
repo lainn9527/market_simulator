@@ -3,3 +3,4 @@ __pycache__/*
 *.code-workspace
 result/*
 .ipynb_checkpoints/*
+tmp.py

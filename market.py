@@ -80,8 +80,8 @@ class Market:
     def get_current_price(self, code):
         return self.orderbooks[code].current_record['price']
 
-    def get_records(self, step = 1):
-        return self.orderbooks[code].steps_record[:-1*(step+1):-1]
+    def get_records(self, code, _type, step = 1):
+        return self.orderbooks[code].steps_record[_type][:-1*(step+1):-1]
 
     def get_best_bids(self, code, number = 1):
         return [{'price': price, 'volume': self.orderbooks[code].bids_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
@@ -101,9 +101,9 @@ class Market:
     def market_stats(self):
         stats = {}
         for code, orderbook in self.orderbooks.items():
-            amount = orderbook.steps_record[-1]['volume']
-            volume = orderbook.steps_record[-1]['amount']
-            average_price = orderbook.steps_record[-1]['average']
+            amount = orderbook.steps_record['volume'][-1]
+            volume = orderbook.steps_record['amount'][-1]
+            average_price = orderbook.steps_record['average'][-1]
             stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume}
         return stats
 

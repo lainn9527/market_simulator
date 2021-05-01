@@ -56,7 +56,7 @@ class OrderBook:
         self.num_of_order = 0
 
         self.current_record: Dict = defaultdict(float) # OHLCVA
-        self.steps_record: List[Dict] = list()  # OHLCVA
+        self.steps_record: List[Dict] = dict()  # OHLCVA
 
 
 
@@ -74,8 +74,9 @@ class OrderBook:
         # point to the base price
         self.tick_size = tick_size
 
+        record_list = ['open', 'high', 'low', 'close', 'average', 'volume', 'amount']
+        self.steps_record.update({key: [] for key in record_list})
         self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
-
 
 
 
@@ -365,9 +366,12 @@ class OrderBook:
         self.current_record['close'] = self.current_record.pop('price')
         self.current_record['average'] = round(self.current_record['amount']/(self.current_record['volume'] + 1e-6), 2) if self.current_record['amount'] != 0 else self.current_record['close']
         self.current_record['amount'] = round(self.current_record['amount'], 2)
-        self.steps_record.append(self.current_record)
+        
+        for key in self.steps_record.keys():
+            self.steps_record[key].append(self.current_record[key])
+        
         self.current_record = defaultdict(float)
-        self.update_record(**{'price': self.steps_record[-1]['close'], 'volume': 0, 'amount': 0})
+        self.update_record(**{'price': self.steps_record['close'][-1], 'volume': 0, 'amount': 0})
     
     def check_spread(self):
         if len(self.bids_price) <= 1 or len(self.asks_price) <= 0:
