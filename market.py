@@ -9,13 +9,23 @@ class Market:
         self.orderbooks = None
         self.core = core
         self.is_trading = False
-
+        self.interest_rate = 1
+        self.interest_period = 100
+    
     def start(self):
         self.orderbooks = {code: OrderBook(self, code, value['value']) for code, value in self.config['Securities'].items()}
+        self.interest_rate = self.config['Structure']['interest_rate']
+        self.interest_period = self.config['Structure']['interest_period']
 
     def step(self):
         for orderbook in self.orderbooks.values():
-            orderbook.step_summarize()        
+            orderbook.step_summarize()
+        
+
+        if self.get_time() % self.interest_period == 0:
+            self.issue_interest()
+
+
         
     def open_session(self):
         # determine the price list of orderbook
@@ -74,6 +84,12 @@ class Market:
         else:
             raise Exception
 
+    def issue_interest(self):
+        self.send_message(Message('ALL_AGENTS', 'ISSUE_INTEREST', 'MARKET', 'agents', {'interest_rate': self.interest_rate}))
+
+    def issue_dividend(self):
+        pass
+
     def get_order_record(self, code, order_id):
         return self.orderbooks[code].orders[order_id]
 
@@ -101,8 +117,8 @@ class Market:
     def market_stats(self):
         stats = {}
         for code, orderbook in self.orderbooks.items():
-            amount = orderbook.steps_record['volume'][-1]
-            volume = orderbook.steps_record['amount'][-1]
+            volume = orderbook.steps_record['volume'][-1]
+            amount = orderbook.steps_record['amount'][-1]
             average_price = orderbook.steps_record['average'][-1]
             stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume}
         return stats

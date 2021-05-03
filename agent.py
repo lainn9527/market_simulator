@@ -42,7 +42,7 @@ class Agent:
         if message.receiver != self.unique_id and message.receiver != 'agents':
             raise Exception('Wrong receiver!')
 
-        message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED']
+        message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED', 'ISSUE_INTEREST']
 
         if message.subject == 'OPEN_SESSION':
             # receive time and ready to palce order
@@ -58,32 +58,20 @@ class Agent:
             # self.log_event('ORDER_PLACED', self.orders[order.code][order.order_id])
 
 
-        elif message.subject == 'ORDER_FILLED':
-            order_record = self.core.get_order_record(message.content['code'], message.content['order_id'])
-            if message.content['bid_or_ask'] == 'BID':
-                self.holdings[message.content['code']] += message.content['quantity']
-                self.cash += (order_record.order.price - message.content['price']) * message.content['quantity']
-            
-            elif order_record.order.bid_or_ask == 'ASK':
-                self.cash += message.content['price'] * message.content['quantity']            
-            
-            self.log_event('ORDER_FILLED', {'price': message.content['price'], 'quantity': message.content['quantity']})
+        elif message.subject == 'ORDER_FILLED':         
+            self.handle_filled_order(message.content['code'], message.content['order_id'], message.content['price'], message.content['quantity'])
 
 
         elif message.subject == 'ORDER_FINISHED':
-            self.orders[message.content['code']].remove(message.content['order_id'])
-            self.orders_history[message.content['code']].append(message.content['order_id'])
-            self.log_event('ORDER_FINISHED', {'order_record': self.core.get_order_record(code = message.content['code'] , order_id = message.content['order_id'])} )
+            self.handle_finished_order(message.content['code'], message.content['order_id'])
         
         elif message.subject == 'ORDER_CANCELLED':
-            order_record = self.core.get_order_record(message.content['code'], message.content['order_id'])
-            if order_record.order.bid_or_ask == 'BID':
-                self.cash += message.content['unfilled_amount']
-            elif order_record.order.bid_or_ask == 'ASK':
-                self.holdings[message.content['code']] += message.content['unfilled_quantity']
-            self.orders[message.content['code']].remove(message.content['order_id'])
-            self.orders_history[message.content['code']].append(message.content['order_id'])
-            self.handle_cancelled_order(code = message.content['code'], order_id = message.content['order_id'])
+            self.handle_cancelled_order(code = message.content['code'], order_id = message.content['order_id'], unfilled_amount = message.content['unfilled_amount'], unfilled_quantity = message.content['unfilled_quantity'])
+
+
+        elif message.subject == 'ISSUE_INTEREST':
+            interest_rate = message.content['interest_rate']
+            self.cash += round(self.cash * interest_rate)
 
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -91,8 +79,8 @@ class Agent:
             raise Exception(f"Invalid subject for agent {self.unique_id}")
 
     def place_limit_bid_order(self, code, volume, price):
-        cost = volume * price
-        if volume == 0 or cost > self.cash:
+        cost = volume * price * 100
+        if price <= 0 or volume == 0 or cost > self.cash:
             return
 
         self.cash -= cost
@@ -102,7 +90,7 @@ class Agent:
         self.core.send_message(msg)
 
     def place_limit_ask_order(self, code, volume, price):
-        if volume == 0:
+        if volume == 0 or price <= 0:
             return
         if volume > self.holdings[code]:
             raise Exception(f"Not enough {code} shares")
@@ -127,8 +115,31 @@ class Agent:
     def cancel_order(self):
         pass
 
-    def handle_cancelled_order(self, code, order_id):
-        pass
+    def handle_filled_order(self, code, order_id, price, quantity):
+        order_record = self.core.get_order_record(code, order_id)
+        if order_record.order.bid_or_ask == 'BID':
+            self.holdings[code] += quantity
+            self.cash += (order_record.order.price - price) * quantity * 100
+        
+        elif order_record.order.bid_or_ask == 'ASK':
+            self.cash += price * quantity * 100
+
+        self.log_event('ORDER_FILLED', {'price': price, 'quantity': quantity})
+
+    def handle_finished_order(self, code, order_id):
+        self.orders[code].remove(order_id)
+        self.orders_history[code].append(order_id)
+        self.log_event('ORDER_FINISHED', {'order_record': self.core.get_order_record(code = code , order_id = order_id)})
+
+
+    def handle_cancelled_order(self, code, order_id, unfilled_amount, unfilled_quantity):
+        order_record = self.core.get_order_record(code, order_id)
+        if order_record.order.bid_or_ask == 'BID':
+            self.cash += unfilled_amount
+        elif order_record.order.bid_or_ask == 'ASK':
+            self.holdings[code] += unfilled_quantity
+        self.orders[code].remove(order_id)
+        self.orders_history[code].append(order_id)
 
 
     def log_event(self, event_type, event):
@@ -215,8 +226,8 @@ class ZeroIntelligenceAgent(Agent):
 
 class ChartistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 1, threshold = 1, strategy = None, risk_preference = 1):
-        super().__init__('ChartistAgent', start_cash, risk_preference, threshold)
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 1, threshold = 1, strategy = None):
+        super().__init__('ChartistAgent', start_cash, start_securities,risk_preference, threshold)
         ChartistAgent.add_counter()
         self.strategy = strategy
         self.risk_preference = risk_preference
@@ -248,7 +259,7 @@ class ChartistAgent(Agent):
     def generate_bid_order(self, code, amount):
         tick_size = self.core.get_tick_size(code)
         price = round(self.core.get_current_price(code) + 2 * tick_size, 2)
-        quantity = amount // price
+        quantity = amount // (price * 100)
         self.place_limit_bid_order(code, volume = quantity, price = price)
         
     def generate_ask_order(self, code, quantity):

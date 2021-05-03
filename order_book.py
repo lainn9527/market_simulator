@@ -44,6 +44,7 @@ class OrderBook:
         self.code = code
         self.value = value
         self.tick_size = None
+        self.stock_size = 100
         self.history_order = dict()
 
         self.orders = dict()
@@ -124,12 +125,10 @@ class OrderBook:
         # check liquidity
         # match the order if bid price is the best and >= the best ask price
         if (len(self.bids_price) == 0 or order.price > self.bids_price[0]) and len(self.asks_price) > 0:
-            transaction_quantity, transaction_amount, last_price = self.match_bid_order(
-                order.price, order.quantity)
+            transaction_quantity, transaction_amount, last_price = self.match_bid_order(order.price, order.quantity)
         if transaction_quantity > 0:
             # if there is any match, fill the limit order
-            self.fill_order(order_id, round(
-                transaction_amount/transaction_quantity, 2), transaction_quantity)
+            self.fill_order(order_id, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
             to_update = {
                 'price': last_price,
                 'volume': transaction_quantity,
@@ -178,7 +177,7 @@ class OrderBook:
                 if len(self.asks_price) == 0:
                     break
             best_ask_price = self.asks_price[0]
-
+        transaction_amount = self.stock_size * transaction_amount
         return transaction_quantity, transaction_amount, last_price
 
     def quote_bid_order(self, order_id):
@@ -260,7 +259,8 @@ class OrderBook:
                 if len(self.bids_price) == 0:
                     break
             best_bid_price = self.bids_price[0]
-
+        
+        transaction_amount = self.stock_size * transaction_amount
         return transaction_quantity, transaction_amount, last_price
 
     def quote_ask_order(self, order_id):
@@ -331,7 +331,7 @@ class OrderBook:
         order_record.transactions.append(TransactionRecord(
             time=time, price=price, quantity=quantity))
         order_record.filled_quantity += quantity
-        order_record.filled_amount += price * quantity
+        order_record.filled_amount += price * quantity * self.stock_size
         # send message of transactions
         self.market.send_message(
             Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {
@@ -354,7 +354,7 @@ class OrderBook:
         order_record = self.orders[order_id]
         order = order_record.order
         price, unfilled_quantity = order.price, order.quantity - order_record.filled_quantity
-        unfilled_amount = price * unfilled_quantity
+        unfilled_amount = price * unfilled_quantity * self.stock_size
 
         if order.bid_or_ask == 'BID':
             self.bids_orders[price].remove(order_id)
@@ -396,8 +396,7 @@ class OrderBook:
 
     def step_summarize(self):
         self.current_record['close'] = self.current_record.pop('price')
-        self.current_record['average'] = round(self.current_record['amount']/(
-            self.current_record['volume'] + 1e-6), 2) if self.current_record['amount'] != 0 else self.current_record['close']
+        self.current_record['average'] = round(self.current_record['amount']/ (1000*self.current_record['volume']), 2) if self.current_record['amount'] != 0 else self.current_record['close']
         self.current_record['amount'] = round(self.current_record['amount'], 2)
 
         for key in self.steps_record.keys():

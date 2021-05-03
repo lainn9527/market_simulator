@@ -1,5 +1,12 @@
 {
     "Market":{
+        "Structure": {
+            "interest_rate": 1.1,
+            "interest_period": 100,
+            "dividend_base": 10,
+            "dividend_ar": 0.95,
+            "dividend_var": 0.0743
+        },
         "Securities": {
             "TSMC": {
                 "value": 100
@@ -9,7 +16,7 @@
 
     "Agent": {
         "Global": {
-            "cash": 10000,
+            "cash": 100000,
             "securities": {
                 "TSMC": 100
             }
