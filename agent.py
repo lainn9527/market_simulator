@@ -8,7 +8,7 @@ from typing import Dict, List
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _type, start_cash = 10000000, start_securities = None):
+    def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1, threshold = 1):
         Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
@@ -27,8 +27,9 @@ class Agent:
         self.orders_history = {code: [] for code in self.holdings.keys()}
 
         # state flag
-        self.is_trading = False
-        self.total_timestep = None
+        self.risk_preference = risk_preference
+        self.threshold = threshold
+        
     
     def start(self, core):
         self.core = core
@@ -70,24 +71,28 @@ class Agent:
 
 
         elif message.subject == 'ORDER_FINISHED':
-            for i, order_id in enumerate(self.orders[message.content['code']]):
-                if order_id == message.content['order_id']:
-                    self.orders[message.content['code']].pop(i)
+            self.orders[message.content['code']].remove(message.content['order_id'])
             self.orders_history[message.content['code']].append(message.content['order_id'])
-
             self.log_event('ORDER_FINISHED', {'order_record': self.core.get_order_record(code = message.content['code'] , order_id = message.content['order_id'])} )
         
+        elif message.subject == 'ORDER_CANCELLED':
+            order_record = self.core.get_order_record(message.content['code'], message.content['order_id'])
+            if order_record.order.bid_or_ask == 'BID':
+                self.cash += message.content['unfilled_amount']
+            elif order_record.order.bid_or_ask == 'ASK':
+                self.holdings[message.content['code']] += message.content['unfilled_quantity']
+            self.orders[message.content['code']].remove(message.content['order_id'])
+            self.orders_history[message.content['code']].append(message.content['order_id'])
+            self.handle_cancelled_order(code = message.content['code'], order_id = message.content['order_id'])
+
         elif message.subject == 'ORDER_INVALIDED':
             pass
         else:
             raise Exception(f"Invalid subject for agent {self.unique_id}")
 
     def place_limit_bid_order(self, code, volume, price):
-        if volume == 0:
-            return
-        
         cost = volume * price
-        if cost > self.cash:
+        if volume == 0 or cost > self.cash:
             return
 
         self.cash -= cost
@@ -99,9 +104,9 @@ class Agent:
     def place_limit_ask_order(self, code, volume, price):
         if volume == 0:
             return
-
         if volume > self.holdings[code]:
             raise Exception(f"Not enough {code} shares")
+
         self.holdings[code] -= volume
         order = LimitOrder(self.unique_id, code, 'LIMIT', 'ASK', volume, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
@@ -120,6 +125,9 @@ class Agent:
         pass
 
     def cancel_order(self):
+        pass
+
+    def handle_cancelled_order(self, code, order_id):
         pass
 
 
@@ -171,8 +179,8 @@ class TestAgent(Agent):
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, start_cash = 1000000, start_securities = None, bid_side = 0.8, range_of_price = 5, range_of_quantity = 5):
-        super().__init__('ZERO_INTELLIGENCE', start_cash, start_securities)
+    def __init__(self, start_cash = 1000000, start_securities = None, risk_preference = 1, threshold = 1, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+        super().__init__('ZERO_INTELLIGENCE', start_cash, start_securities, risk_preference, threshold)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -200,14 +208,15 @@ class ZeroIntelligenceAgent(Agent):
             bid_or_ask = 'ASK'
             price = round(current_price - np.random.randint(1, self.range_of_price) * tick_size, 2)
             self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+
         # if existed, modify the order
         # if len(self.orders[code]) != 0:
             # pass
 
 class ChartistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, strategy = None, risk_preference = 1):
-        super().__init__('ChartistAgent', start_cash, start_securities)
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 1, threshold = 1, strategy = None, risk_preference = 1):
+        super().__init__('ChartistAgent', start_cash, risk_preference, threshold)
         ChartistAgent.add_counter()
         self.strategy = strategy
         self.risk_preference = risk_preference
@@ -279,7 +288,7 @@ class BrokerAgent(Agent):
         # provide liquidity when open session
         if self.code not in self.holdings.keys():
             raise Exception
-        if self.is_open_auction == True and self.is_trading == True:
+        if self.is_open_auction == True:
             best_ask = self.current_price("ASK", self.code, 1)[0]['price']
             price_info = self.core.get_price_info(self.code)
             price_list = [best_ask + price_info['tick_size'] * i for i in range(-5, 5)]

@@ -12,7 +12,7 @@ class AgentManager:
         self.securities_list = []
         self.current_record = {}
         self.step_records = []
-    
+
     def start(self, securities_list):
         self.securities_list += securities_list
         self.build_agents()
@@ -27,8 +27,10 @@ class AgentManager:
 
 
     def step(self):
-        for agent in self.agents.values():
-            agent.step()
+        agent_ids = list(self.agents.keys())
+        random.shuffle(agent_ids)
+        for _id in agent_ids:
+            self.agents[_id].step()
         self.update_record()
 
     def receive_message(self, message):
@@ -79,7 +81,6 @@ class AgentManager:
             securities.update(holdings)
 
             for i in range(group['number']):
-                group['risk_preference']
                 new_agent = agent.ChartistAgent(start_cash = self.global_config['cash'],
                                                 start_securities = securities,
                                                 risk_preference = group['risk_preference'])
