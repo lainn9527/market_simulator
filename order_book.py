@@ -130,7 +130,8 @@ class OrderBook:
             transaction_quantity, transaction_amount, last_price = self.match_bid_order(order.price, order.quantity)
         if transaction_quantity > 0:
             # if there is any match, fill the limit order
-            self.fill_order(order_id, round(transaction_amount/transaction_quantity, 2), transaction_quantity)
+            price = round(transaction_amount/(transaction_quantity * self.market.stock_size), 2)
+            self.fill_order(order_id, price, transaction_quantity)
             to_update = {
                 'price': last_price,
                 'volume': transaction_quantity,
@@ -211,8 +212,8 @@ class OrderBook:
 
         if transaction_quantity > 0:
             # if there is any match, fill the limit order
-            self.fill_order(order_id, round(
-                transaction_amount/transaction_quantity, 2), transaction_quantity)
+            price = round(transaction_amount/(transaction_quantity * self.market.stock_size), 2)
+            self.fill_order(order_id, price, transaction_quantity)
             to_update = {
                 'price': last_price,
                 'volume': transaction_quantity,
@@ -412,10 +413,10 @@ class OrderBook:
             self.clear_orders()
 
     def clear_orders(self):
-        for order_id in self.current_orders:
+        for order_id in self.current_orders[:]:
             if self.market.get_time() - self.orders[order_id].placed_time >= 100:
                 self.cancel_order(order_id)
-
+            
     def check_spread(self):
         if len(self.bids_price) <= 1 or len(self.asks_price) <= 0:
             return

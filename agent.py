@@ -23,6 +23,9 @@ class Agent:
         '''
         self.cash = start_cash
         self.holdings = start_securities
+        self.reserved_cash = 0
+        self.reserved_holdings = {code: 0 for code in self.holdings.keys()}
+        self.wealth = 0
         self.orders = {code: [] for code in self.holdings.keys()}
         self.orders_history = {code: [] for code in self.holdings.keys()}
 
@@ -32,10 +35,11 @@ class Agent:
     
     def start(self, core):
         self.core = core
-        # ready to go
+        
 
     def step(self):
-        pass
+        self.update_wealth()
+
 
     def receive_message(self, message):
         if message.receiver != self.unique_id and message.receiver != 'agents':
@@ -46,10 +50,6 @@ class Agent:
         if message.subject == 'OPEN_SESSION':
             # receive time and ready to palce order
             self.handle_open()
-
-        elif message.subject == 'CLOSE_SESSION':
-            # receive the daily info of market: daily_info[code] = {'date': date in isoformat, 'order': self.orders, 'bid': self.bids, 'ask': self.asks, 'stats': self.stats }
-            self.handle_close()
 
         elif message.subject == 'ORDER_PLACED':
             # check if the order is transformed from market order
@@ -71,11 +71,9 @@ class Agent:
         elif message.subject == 'ISSUE_INTEREST':
             interest_rate = message.content['interest_rate']
             self.cash += round(self.cash * interest_rate, 2)
-
         elif message_subject == 'ISSUE_DIVIDEND':
             dividend = self.market.stock_size * message.content['dividend']
             self.cash += dividend
-
 
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -83,23 +81,29 @@ class Agent:
             raise Exception(f"Invalid subject for agent {self.unique_id}")
 
     def place_limit_bid_order(self, code, volume, price):
+        price = round(price, 2)
         cost = volume * price * 100
         if price <= 0 or volume == 0 or cost > self.cash:
             return
+        if price > 500:
+            self.for_break()
 
         self.cash -= cost
+        self.reserved_cash += cost
         order = LimitOrder(self.unique_id, code, 'LIMIT', 'BID', volume, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
         
         self.core.send_message(msg)
 
     def place_limit_ask_order(self, code, volume, price):
+        price = round(price, 2)
         if volume == 0 or price <= 0:
             return
         if volume > self.holdings[code]:
             raise Exception(f"Not enough {code} shares")
 
         self.holdings[code] -= volume
+        self.reserved_holdings[code] += volume
         order = LimitOrder(self.unique_id, code, 'LIMIT', 'ASK', volume, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
         
@@ -124,9 +128,11 @@ class Agent:
         if order_record.order.bid_or_ask == 'BID':
             self.holdings[code] += quantity
             self.cash += (order_record.order.price - price) * quantity * 100
+            self.reserved_cash -= order_record.order.price * quantity * 100
         
         elif order_record.order.bid_or_ask == 'ASK':
             self.cash += price * quantity * 100
+            self.reserved_holdings[code] -= quantity
 
         self.log_event('ORDER_FILLED', {'price': price, 'quantity': quantity})
 
@@ -140,19 +146,21 @@ class Agent:
         order_record = self.core.get_order_record(code, order_id)
         if order_record.order.bid_or_ask == 'BID':
             self.cash += unfilled_amount
+            self.reserved_cash -= unfilled_amount
         elif order_record.order.bid_or_ask == 'ASK':
             self.holdings[code] += unfilled_quantity
+            self.reserved_holdings[code] -= unfilled_quantity
+            
         self.orders[code].remove(order_id)
         self.orders_history[code].append(order_id)
 
-    def get_wealth(self):
+    def update_wealth(self):
+        cash = self.cash + self.reserved_cash
         securities_value = 0
-        for code, value in self.holdings.items():
-            price_list = self.core.get_records(code, 'average', step = 10) if self.get_time() > 0 else [self.core.get_current_price(code)]
-            securities_value += value * (sum(price_list) / len(price_list))
-
-        return self.cash + securities_value
-
+        for code in self.holdings.keys():
+            average_price = self.core.get_records(code, 'average', step = 1)[0] if self.get_time() > 0 else self.core.get_current_price(code)
+            securities_value +=  average_price * (self.holdings[code] + self.reserved_holdings[code])        
+        self.wealth = cash + securities_value
 
     def get_time(self):
         return self.core.timestep
@@ -161,6 +169,11 @@ class Agent:
         # print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
         return
     
+    def handle_open(self):
+        return
+
+    def for_break(self):
+        pass
     @classmethod
     def add_counter(cls):
         cls.num_of_agent += 1
@@ -169,20 +182,6 @@ class Agent:
     def get_counter(cls):
         return cls.num_of_agent
     
-    def generate_id(self):
-        pass
-        
-    def handle_open(self):
-        pass
-
-    def schedule_auction(self):
-        pass
-    
-    def schedule_continuous_trading(self):
-        pass
-    
-    def handle_close(self):
-        pass
 
 class TestAgent(Agent):
     num_of_agent = 0
@@ -251,6 +250,7 @@ class ChartistAgent(Agent):
         self.cool_down = 0
     
     def step(self):
+        super().step()
         if self.get_time() // self.adjust_period == 0:
             self.adjust_portfolio()
 
@@ -273,15 +273,15 @@ class ChartistAgent(Agent):
         if len(price_list) < time_window:
             return
 
-        trend = current_price / self.sma(price_list)
+        trend = current_price - self.sma(price_list)
         bid_amount = self.risk_preference * 0.3 * self.quota
         ask_quantity = round(self.risk_preference * 0.3 * self.holdings[code])
-        price = current_price * (1 + trend)
+        price = current_price + trend
         
-        if trend > 1:
+        if trend > 0:
             self.generate_bid_order(code, quantity = round(bid_amount / price), price = price)
 
-        elif trend < 1:
+        elif trend < 0:
             self.generate_ask_order(code, quantity = ask_quantity, price = price)
 
     def generate_bid_order(self, code, quantity, price = None):
@@ -295,8 +295,7 @@ class ChartistAgent(Agent):
         self.place_limit_ask_order(code, volume = quantity, price = price)
 
     def adjust_portfolio(self):
-        current_wealth = self.get_wealth()
-        self.quota = self.risk_preference * current_wealth
+        self.quota = self.risk_preference * self.wealth
 
 
     def sma(self, price_list):

@@ -49,7 +49,7 @@ class AgentManager:
                 holdings['CASH'] += agent.cash
                 for code in agent.holdings.keys():
                     holdings[code] += agent.holdings[code]
-                holdings['WEALTH'] += agent.get_wealth()
+                holdings['WEALTH'] += agent.wealth
             record[group_name] = {code: round(value/len(agents), 2) for code, value in holdings.items()}
         
         self.step_records.append(record)
