@@ -8,7 +8,7 @@ from utils import write_records
 from pathlib import Path
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':｀
     config_path = Path("config.json")
     result_dir_path = Path("result/")
     random_seed = 9527

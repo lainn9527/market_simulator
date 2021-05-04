@@ -8,7 +8,7 @@ from typing import Dict, List
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1, threshold = 1):
+    def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1):
         Agent.add_counter()
         self.type = _type
         self.start_cash = start_cash
@@ -28,7 +28,6 @@ class Agent:
 
         # state flag
         self.risk_preference = risk_preference
-        self.threshold = threshold
         
     
     def start(self, core):
@@ -71,7 +70,12 @@ class Agent:
 
         elif message.subject == 'ISSUE_INTEREST':
             interest_rate = message.content['interest_rate']
-            self.cash += round(self.cash * interest_rate)
+            self.cash += round(self.cash * interest_rate, 2)
+
+        elif message_subject == 'ISSUE_DIVIDEND':
+            dividend = self.market.stock_size * message.content['dividend']
+            self.cash += dividend
+
 
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -141,6 +145,17 @@ class Agent:
         self.orders[code].remove(order_id)
         self.orders_history[code].append(order_id)
 
+    def get_wealth(self):
+        securities_value = 0
+        for code, value in self.holdings.items():
+            price_list = self.core.get_records(code, 'average', step = 10) if self.get_time() > 0 else [self.core.get_current_price(code)]
+            securities_value += value * (sum(price_list) / len(price_list))
+
+        return self.cash + securities_value
+
+
+    def get_time(self):
+        return self.core.timestep
 
     def log_event(self, event_type, event):
         # print(f"Agent: {self.unique_id}, Event type: {event_type}, Event: {event}")
@@ -190,8 +205,8 @@ class TestAgent(Agent):
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, start_cash = 1000000, start_securities = None, risk_preference = 1, threshold = 1, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
-        super().__init__('ZERO_INTELLIGENCE', start_cash, start_securities, risk_preference, threshold)
+    def __init__(self, start_cash = 1000000, start_securities = None, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+        super().__init__('ZERO_INTELLIGENCE', start_cash, start_securities)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -226,52 +241,70 @@ class ZeroIntelligenceAgent(Agent):
 
 class ChartistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 1, threshold = 1, strategy = None):
-        super().__init__('ChartistAgent', start_cash, start_securities,risk_preference, threshold)
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0, strategy = None):
+        super().__init__('ChartistAgent', start_cash, start_securities,risk_preference)
         ChartistAgent.add_counter()
         self.strategy = strategy
         self.risk_preference = risk_preference
+        self.quota = 0
+        self.adjust_period = 200
         self.cool_down = 0
-
+    
     def step(self):
-        if self.cool_down > 0:
+        if self.get_time() // self.adjust_period == 0:
+            self.adjust_portfolio()
+
+        if self.quota < 0:
+            return
+
+        elif self.cool_down > 0:
             self.cool_down -= 1
             return
-        default_cool_down = np.random.randint(500, 1000)
-        default_bid_signal = 1.05
-        default_ask_signal = 0.95
 
+        default_cool_down = np.random.randint(50, 150)
+        self.generate_order()
+    
+    def generate_order(self):
         code = "TSMC"
-        price_list = self.core.get_records(code = code, _type = 'average', step = 100)
-        if len(price_list) < 100:
+        time_window = self.strategy['time_window']
+        current_price = self.core.get_current_price(code)
+        price_list = self.core.get_records(code = code, _type = 'average', step = time_window)
+
+        if len(price_list) < time_window:
             return
+
+        trend = current_price / self.sma(price_list)
+        bid_amount = self.risk_preference * 0.3 * self.quota
+        ask_quantity = round(self.risk_preference * 0.3 * self.holdings[code])
+        price = current_price * (1 + trend)
         
-        if self.sma(price_list[:10]) / self.sma(price_list[:30]) >= 1.05:
-            if np.random.binomial(n = 1, p = 0.5 * self.risk_preference) == 1:
-                self.generate_bid_order(code, amount = 0.1 * self.cash)
-            self.cool_down = round(default_cool_down / self.risk_preference)
-        
-        elif self.sma(price_list[:10]) / self.sma(price_list[:30]) <= 0.95:
-            if np.random.binomial(n = 1, p = 0.5 / self.risk_preference) == 1:
-                self.generate_ask_order(code, quantity = round(0.3 * self.holdings[code]))
-            self.cool_down = round(default_cool_down / self.risk_preference)
-            
-    def generate_bid_order(self, code, amount):
+        if trend > 1:
+            self.generate_bid_order(code, quantity = round(bid_amount / price), price = price)
+
+        elif trend < 1:
+            self.generate_ask_order(code, quantity = ask_quantity, price = price)
+
+    def generate_bid_order(self, code, quantity, price = None):
         tick_size = self.core.get_tick_size(code)
-        price = round(self.core.get_current_price(code) + 2 * tick_size, 2)
-        quantity = amount // (price * 100)
+        price = price if price != None else round(self.core.get_current_price(code) + 2 * tick_size, 2)
         self.place_limit_bid_order(code, volume = quantity, price = price)
         
-    def generate_ask_order(self, code, quantity):
+    def generate_ask_order(self, code, quantity, price = None):
         tick_size = self.core.get_tick_size(code)
-        price = round(self.core.get_current_price(code) - 2 * tick_size, 2)
+        price = price if price != None else round(self.core.get_current_price(code) - 2 * tick_size, 2)
         self.place_limit_ask_order(code, volume = quantity, price = price)
+
+    def adjust_portfolio(self):
+        current_wealth = self.get_wealth()
+        self.quota = self.risk_preference * current_wealth
+
 
     def sma(self, price_list):
         return sum(price_list) / len(price_list)
 
     def ema(self):
         pass
+
     def macd(self):
         pass
     

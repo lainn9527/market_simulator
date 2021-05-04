@@ -2,14 +2,15 @@
     "Market":{
         "Structure": {
             "interest_rate": 1.1,
-            "interest_period": 100,
-            "dividend_base": 10,
-            "dividend_ar": 0.95,
-            "dividend_var": 0.0743
+            "interest_period": 100
         },
         "Securities": {
             "TSMC": {
-                "value": 100
+                "value": 100,
+                "dividend_ratio": 0.1,
+                "dividend_ar": 0.95,
+                "dividend_var": 0.0743,
+                "dividend_period": 100
             }
         }
     },
@@ -23,7 +24,7 @@
         },
         "ZeroIntelligenceAgent": [
             {
-                "number": 1000,
+                "number": 2000,
                 "bid_side": 0.5,
                 "range_of_price": 5,
                 "range_of_quantity": 5
@@ -33,7 +34,9 @@
         "ChartistAgent": [
             {
                 "number": 100,
-                "risk_preference": 1.05
+                "risk_preference_mean": 0,
+                "risk_preference_var": 1,
+                "range_of_time_window": 100
             }
         ],
 

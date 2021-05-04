@@ -1,6 +1,4 @@
-import pandas as pd
-import datetime
-import math
+import random
 from order import LimitOrder, MarketOrder
 from dataclasses import dataclass
 from collections import defaultdict
@@ -10,7 +8,7 @@ from utils import OrderRecord, TransactionRecord
 
 
 class OrderBook:
-    def __init__(self, market, code, value):
+    def __init__(self, market, code, value, dividend_ratio, dividend_ar, dividend_var, dividend_period):
         '''
         history: [{
             'date': in isoformat (e.g. 2021-03-08),
@@ -44,8 +42,11 @@ class OrderBook:
         self.code = code
         self.value = value
         self.tick_size = None
-        self.stock_size = 100
         self.history_order = dict()
+        self.dividend_ratio = dividend_ratio
+        self.dividend_ar = dividend_ar
+        self.dividend_var = dividend_var
+        self.dividend_period = dividend_period
 
         self.orders = dict()
         self.current_orders = []
@@ -60,6 +61,7 @@ class OrderBook:
         self.num_of_cancelled_order = 0
         self.current_record: Dict = defaultdict(float)  # OHLCVA
         self.steps_record: List[Dict] = dict()  # OHLCVA
+        self.dividend_record = dict()
 
     def set_price(self):
         # base price for call auction in the open session
@@ -177,7 +179,7 @@ class OrderBook:
                 if len(self.asks_price) == 0:
                     break
             best_ask_price = self.asks_price[0]
-        transaction_amount = self.stock_size * transaction_amount
+        transaction_amount = self.market.stock_size * transaction_amount
         return transaction_quantity, transaction_amount, last_price
 
     def quote_bid_order(self, order_id):
@@ -260,7 +262,7 @@ class OrderBook:
                     break
             best_bid_price = self.bids_price[0]
         
-        transaction_amount = self.stock_size * transaction_amount
+        transaction_amount = self.market.stock_size * transaction_amount
         return transaction_quantity, transaction_amount, last_price
 
     def quote_ask_order(self, order_id):
@@ -331,7 +333,7 @@ class OrderBook:
         order_record.transactions.append(TransactionRecord(
             time=time, price=price, quantity=quantity))
         order_record.filled_quantity += quantity
-        order_record.filled_amount += price * quantity * self.stock_size
+        order_record.filled_amount += price * quantity * self.market.stock_size
         # send message of transactions
         self.market.send_message(
             Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {
@@ -354,7 +356,7 @@ class OrderBook:
         order_record = self.orders[order_id]
         order = order_record.order
         price, unfilled_quantity = order.price, order.quantity - order_record.filled_quantity
-        unfilled_amount = price * unfilled_quantity * self.stock_size
+        unfilled_amount = price * unfilled_quantity * self.market.stock_size
 
         if order.bid_or_ask == 'BID':
             self.bids_orders[price].remove(order_id)
@@ -396,7 +398,7 @@ class OrderBook:
 
     def step_summarize(self):
         self.current_record['close'] = self.current_record.pop('price')
-        self.current_record['average'] = round(self.current_record['amount']/ (1000*self.current_record['volume']), 2) if self.current_record['amount'] != 0 else self.current_record['close']
+        self.current_record['average'] = round(self.current_record['amount']/ (100*self.current_record['volume']), 2) if self.current_record['amount'] != 0 else self.current_record['close']
         self.current_record['amount'] = round(self.current_record['amount'], 2)
 
         for key in self.steps_record.keys():

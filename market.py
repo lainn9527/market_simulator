@@ -1,3 +1,4 @@
+import random
 from order_book import OrderBook
 from message import Message
 from order import LimitOrder, MarketOrder
@@ -9,13 +10,14 @@ class Market:
         self.orderbooks = None
         self.core = core
         self.is_trading = False
+        self.stock_size = 100
         self.interest_rate = 1
         self.interest_period = 100
     
     def start(self):
-        self.orderbooks = {code: OrderBook(self, code, value['value']) for code, value in self.config['Securities'].items()}
         self.interest_rate = self.config['Structure']['interest_rate']
         self.interest_period = self.config['Structure']['interest_period']
+        self.orderbooks = {code: OrderBook(self, code, **value) for code, value in self.config['Securities'].items()}
 
     def step(self):
         for orderbook in self.orderbooks.values():
@@ -87,8 +89,14 @@ class Market:
     def issue_interest(self):
         self.send_message(Message('ALL_AGENTS', 'ISSUE_INTEREST', 'MARKET', 'agents', {'interest_rate': self.interest_rate}))
 
-    def issue_dividend(self):
-        pass
+    def issue_dividends(self):
+        for code, orderbook in self.orderbooks.items():
+            previous = list(orderbook.dividend_record.values)[-1] if len(orderbook.dividend_record) > 0 else orderbook.value
+            dividend = orderbook.value + orderbook.dividend_ar * (previous - orderbook.value) + random.gauss(0, orderbook.dividend_var)
+            for order_record in orderbook.current_orders:
+                self.send_message(Message('AGENT', 'ISSUE_DIVIDEND', 'MARKET', order_record.order.orderer, {'code': code, 'dividend': dividend}))
+            orderbook.dividend_record[self.get_time()] = dividend
+        
 
     def get_order_record(self, code, order_id):
         return self.orderbooks[code].orders[order_id]

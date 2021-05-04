@@ -49,7 +49,9 @@ class AgentManager:
                 holdings['CASH'] += agent.cash
                 for code in agent.holdings.keys():
                     holdings[code] += agent.holdings[code]
+                holdings['WEALTH'] += agent.get_wealth()
             record[group_name] = {code: round(value/len(agents), 2) for code, value in holdings.items()}
+        
         self.step_records.append(record)
 
 
@@ -80,10 +82,18 @@ class AgentManager:
             holdings = self.global_config['securities'] if 'securities' not in group.keys() else group['securities']
             securities.update(holdings)
 
+            risk_preferences = [random.gauss(mu = group['risk_preference_mean'], sigma = group['risk_preference_var']) for i in range(group['number'])]
+            min_risk, max_risk = min(risk_preferences), max(risk_preferences)
+            risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+
             for i in range(group['number']):
+                time_window = random.randint(1, group["range_of_time_window"])
+
                 new_agent = agent.ChartistAgent(start_cash = self.global_config['cash'],
                                                 start_securities = securities,
-                                                risk_preference = group['risk_preference'])
+                                                risk_preference = risk_preferences[i],
+                                                strategy = {"time_window": time_window})
+
                 self.agents[new_agent.unique_id] = new_agent
                 self.group_agent[group_name].append(new_agent.unique_id)
             
