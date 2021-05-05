@@ -23,7 +23,11 @@ class AgentManager:
         for _type, groups in self.config.items():
             if len(groups) == 0:
                 continue
-            eval(f"self.build_{self.type_abbreviation(_type)}(groups)")
+            group_conuter = 1
+            for group in groups:
+                short_type = self.type_abbreviation(_type)
+                group_name = f"{short_type}_{group_conuter}"
+                eval(f"self.build_{short_type}_group(group_name, group)")
 
 
     def step(self):
@@ -55,48 +59,59 @@ class AgentManager:
         self.step_records.append(record)
 
 
-    def build_zi(self, groups):
-        group_conuter = 1
-        for group in groups:
-            group_name = f"zi_{group_conuter}"
-            self.group_agent[group_name] = []
-            securities = {code: 0 for code in self.securities_list}
-            holdings = self.global_config['securities'] if 'securities' not in group.keys() else group['securities']
-            securities.update(holdings)
+    def build_zi_group(self, group_name, config):
+        self.group_agent[group_name] = []
+        securities = self.global_config['securities']
 
-            for i in range(group['number']):
-                new_agent = agent.ZeroIntelligenceAgent(start_cash = self.global_config['cash'],
-                                                        start_securities = securities,
-                                                        bid_side = group['bid_side'],
-                                                        range_of_price = group['range_of_price'],
-                                                        range_of_quantity = group['range_of_quantity'])
-                self.agents[new_agent.unique_id] = new_agent
-                self.group_agent[group_name].append(new_agent.unique_id)
+        for i in range(config['number']):
+            new_agent = agent.ZeroIntelligenceAgent(start_cash = self.global_config['cash'],
+                                                    start_securities = self.global_config['securities'],
+                                                    bid_side = config['bid_side'],
+                                                    range_of_price = config['range_of_price'],
+                                                    range_of_quantity = config['range_of_quantity'])
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
     
-    def build_ch(self, groups):
-        group_conuter = 1
-        for group in groups:
-            group_name = f"ch_{group_conuter}"
-            self.group_agent[group_name] = []
-            securities = {code: 0 for code in self.securities_list}
-            holdings = self.global_config['securities'] if 'securities' not in group.keys() else group['securities']
-            securities.update(holdings)
+    def build_tr_group(self, group_name, config):
+        self.group_agent[group_name] = []
+        securities = self.global_config['securities']
 
-            risk_preferences = [random.gauss(mu = group['risk_preference_mean'], sigma = group['risk_preference_var']) for i in range(group['number'])]
-            min_risk, max_risk = min(risk_preferences), max(risk_preferences)
-            risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+        risk_preferences = [random.gauss(mu = config['risk_preference_mean'], sigma = config['risk_preference_var']) for i in range(config['number'])]
+        min_risk, max_risk = min(risk_preferences), max(risk_preferences)
+        # scale to 0~1
+        risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
 
-            for i in range(group['number']):
-                time_window = random.randint(1, group["range_of_time_window"])
+        for i in range(config['number']):
+            time_window = random.randint(1, config["range_of_time_window"])
+            config['strategy'].update({"time_window": time_window})
+            new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
+                                         start_securities = self.global_config['securities'],
+                                         risk_preference = risk_preferences[i],
+                                         strategy = config['strategy'])
 
-                new_agent = agent.ChartistAgent(start_cash = self.global_config['cash'],
-                                                start_securities = securities,
-                                                risk_preference = risk_preferences[i],
-                                                strategy = {"time_window": time_window})
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
 
-                self.agents[new_agent.unique_id] = new_agent
-                self.group_agent[group_name].append(new_agent.unique_id)
-            
+    def build_mr_group(self, group_name, config):
+        self.group_agent[group_name] = []
+        securities = self.global_config['securities']
+
+        risk_preferences = [random.gauss(mu = config['risk_preference_mean'], sigma = config['risk_preference_var']) for i in range(config['number'])]
+        min_risk, max_risk = min(risk_preferences), max(risk_preferences)
+        # scale to 0~1
+        risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+
+        for i in range(config['number']):
+            time_window = random.randint(1, config["range_of_time_window"])
+            config['strategy'].update({"time_window": time_window})
+            new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
+                                         start_securities = self.global_config['securities'],
+                                         risk_preference = risk_preferences[i],
+                                         strategy = config['strategy'])
+
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
+
     def type_abbreviation(self, _type):
         if _type == "ZeroIntelligenceAgent":
             return "zi"
@@ -104,3 +119,9 @@ class AgentManager:
             return "ch"
         elif _type == "FundamentalistAgent":
             return "fd"
+        elif _type == "TrendAgent":
+            return "tr"
+        elif _type == "MeanRevertAgent":
+            return "mr"
+        else:
+            raise Exception(f"No {_type} agent")

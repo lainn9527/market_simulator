@@ -31,15 +31,25 @@
             }
         ],
         
-        "ChartistAgent": [
+        "TrendAgent": [
             {
                 "number": 100,
                 "risk_preference_mean": 0,
                 "risk_preference_var": 1,
-                "range_of_time_window": 100
+                "range_of_time_window": 500,
+                "strategy": {}
             }
         ],
-
+        
+        "MeanRevertAgent": [
+            {
+                "number": 100,
+                "risk_preference_mean": 0,
+                "risk_preference_var": 1,
+                "range_of_time_window": 500,
+                "strategy": {}
+            }
+        ],
         "FundamentalistAgent":[
 
         ]

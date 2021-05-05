@@ -19,5 +19,5 @@ if __name__ == '__main__':
 
     config = json.loads(config_path.read_text())
     core = Core(config)
-    orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = 1000)
+    orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = 3000)
     write_records(orderbooks, agent_manager, result_dir_path)

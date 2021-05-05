@@ -1,6 +1,8 @@
-.vscode
 __pycache__/*
-*.code-workspace
-result/*
 .ipynb_checkpoints/*
+.pytest_cache/*
+.benchmarks/*
+result/*
+.vscode
+*.code-workspace
 tmp.py

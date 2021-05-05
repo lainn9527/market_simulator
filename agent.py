@@ -80,41 +80,44 @@ class Agent:
         else:
             raise Exception(f"Invalid subject for agent {self.unique_id}")
 
-    def place_limit_bid_order(self, code, volume, price):
-        price = round(price, 2)
-        cost = volume * price * 100
-        if price <= 0 or volume == 0 or cost > self.cash:
+    def place_limit_bid_order(self, code, quantity, price):
+        tick_size = self.core.get_tick_size(code)
+        price = round(tick_size * (price // tick_size), 2)
+        cost = quantity * price * 100
+        if price <= 0 or quantity == 0 or cost > self.cash:
             return
         if price > 500:
             self.for_break()
 
         self.cash -= cost
         self.reserved_cash += cost
-        order = LimitOrder(self.unique_id, code, 'LIMIT', 'BID', volume, price)
+        order = LimitOrder(self.unique_id, code, 'LIMIT', 'BID', quantity, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
         
         self.core.send_message(msg)
+    
+    def place_limit_ask_order(self, code, quantity, price):
+        tick_size = self.core.get_tick_size(code)
+        price = round(tick_size * (price // tick_size), 2)
 
-    def place_limit_ask_order(self, code, volume, price):
-        price = round(price, 2)
-        if volume == 0 or price <= 0:
+        if quantity == 0 or price <= 0:
             return
-        if volume > self.holdings[code]:
+        if quantity > self.holdings[code]:
             raise Exception(f"Not enough {code} shares")
 
-        self.holdings[code] -= volume
-        self.reserved_holdings[code] += volume
-        order = LimitOrder(self.unique_id, code, 'LIMIT', 'ASK', volume, price)
+        self.holdings[code] -= quantity
+        self.reserved_holdings[code] += quantity
+        order = LimitOrder(self.unique_id, code, 'LIMIT', 'ASK', quantity, price)
         msg = Message('MARKET', 'LIMIT_ORDER', self.unique_id, 'market', {'order': order})
         
         self.core.send_message(msg)
 
 
 
-    def place_market_bid_order(self, code, volume):
+    def place_market_bid_order(self, code, quantity):
         pass
 
-    def place_market_ask_order(self, code, volume):
+    def place_market_ask_order(self, code, quantity):
         pass
     
     def modify_order(self):
@@ -209,12 +212,36 @@ class ZeroIntelligenceAgent(Agent):
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
+        # self.time_window = time_window
 
     def step(self):
         super().step()
         # to trade?
-        if np.random.binomial(n = 1, p = 0.01) == 1:
+        if np.random.binomial(n = 1, p = 0.02) == 1:
             self.generate_order()
+
+    # def generate_order(self):
+    #     # which one?
+    #     code = "TSMC"
+    #     time_window = 
+    #     current_price = self.core.get_current_price(code)
+    #     price_list = self.core.get_records(code = code, _type = 'average', step = time_window)
+
+    #     if len(price_list) < time_window:
+    #         return
+
+
+    #     # TODO: best bid and best ask
+    #     if np.random.binomial(n = 1, p = 0.5) == 1 or self.holdings[code] == 0:
+    #         bid_or_ask = 'BID'
+    #         # lowest_ask = self.core.
+    #         price = round(current_price + np.random.randint(1, self.range_of_price) * tick_size, 2)
+    #         self.place_limit_bid_order(code, quantity, price)
+    #     else:
+    #         bid_or_ask = 'ASK'
+    #         price = round(current_price - np.random.randint(1, self.range_of_price) * tick_size, 2)
+    #         self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+
 
     def generate_order(self):
         # which one?
@@ -238,31 +265,18 @@ class ZeroIntelligenceAgent(Agent):
         # if len(self.orders[code]) != 0:
             # pass
 
-class ChartistAgent(Agent):
+class TrendAgent(Agent):
     num_of_agent = 0
-    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0, strategy = None):
-        super().__init__('ChartistAgent', start_cash, start_securities,risk_preference)
-        ChartistAgent.add_counter()
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None):
+        super().__init__('TrendAgent', start_cash, start_securities,risk_preference)
+        TrendAgent.add_counter()
         self.strategy = strategy
-        self.risk_preference = risk_preference
-        self.quota = 0
-        self.adjust_period = 200
-        self.cool_down = 0
+        self.trading_probability = max(0.02 * risk_preference, 0.001)
     
     def step(self):
         super().step()
-        if self.get_time() // self.adjust_period == 0:
-            self.adjust_portfolio()
-
-        if self.quota < 0:
-            return
-
-        elif self.cool_down > 0:
-            self.cool_down -= 1
-            return
-
-        default_cool_down = np.random.randint(50, 150)
-        self.generate_order()
+        if np.random.binomial(n = 1, p = self.trading_probability) == 1:
+            self.generate_order()
     
     def generate_order(self):
         code = "TSMC"
@@ -274,28 +288,56 @@ class ChartistAgent(Agent):
             return
 
         trend = current_price - self.sma(price_list)
-        bid_amount = self.risk_preference * 0.3 * self.quota
-        ask_quantity = round(self.risk_preference * 0.3 * self.holdings[code])
         price = current_price + trend
+        risk_free_amount = self.risk_preference * self.wealth
         
-        if trend > 0:
-            self.generate_bid_order(code, quantity = round(bid_amount / price), price = price)
-
+        # trend is positive and need to bid
+        if trend > 0 and self.cash > risk_free_amount:
+            bid_quantity = round( (self.cash - risk_free_amount) / price)
+            self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
+        
+        # trend is ask
         elif trend < 0:
-            self.generate_ask_order(code, quantity = ask_quantity, price = price)
+            self.place_limit_ask_order(code, quantity = self.holdings[code], price = price)
 
-    def generate_bid_order(self, code, quantity, price = None):
-        tick_size = self.core.get_tick_size(code)
-        price = price if price != None else round(self.core.get_current_price(code) + 2 * tick_size, 2)
-        self.place_limit_bid_order(code, volume = quantity, price = price)
+
+    def sma(self, price_list):
+        return sum(price_list) / len(price_list)
+
+class MeanRevertAgent(Agent):
+    num_of_agent = 0
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None):
+        super().__init__('MeanRevertAgent', start_cash, start_securities,risk_preference)
+        MeanRevertAgent.add_counter()
+        self.strategy = strategy
+        self.trading_probability = max(0.02 * risk_preference, 0.001)
+    
+    def step(self):
+        super().step()
+        if np.random.binomial(n = 1, p = self.trading_probability) == 1:
+            self.generate_order()
+
+    def generate_order(self):
+        code = "TSMC"
+        time_window = self.strategy['time_window']
+        current_price = self.core.get_current_price(code)
+        price_list = self.core.get_records(code = code, _type = 'average', step = time_window)
+
+        if len(price_list) < time_window:
+            return
+
+        trend = current_price - self.sma(price_list)
+        price = current_price + trend
+        risk_free_amount = self.risk_preference * self.wealth
+
+        # trend is negative(bid signal) and need to bid
+        if trend < 0 and self.cash > risk_free_amount:
+            bid_quantity = round( (self.cash - risk_free_amount) / price)
+            self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
         
-    def generate_ask_order(self, code, quantity, price = None):
-        tick_size = self.core.get_tick_size(code)
-        price = price if price != None else round(self.core.get_current_price(code) - 2 * tick_size, 2)
-        self.place_limit_ask_order(code, volume = quantity, price = price)
-
-    def adjust_portfolio(self):
-        self.quota = self.risk_preference * self.wealth
+        # trend is positive(ask signal)
+        elif trend > 0:
+            self.place_limit_ask_order(code, quantity = self.holdings[code], price = price)
 
 
     def sma(self, price_list):
@@ -306,8 +348,8 @@ class ChartistAgent(Agent):
 
     def macd(self):
         pass
-    
 
+    
 class FundamentalistAgent(Agent):
     pass
 
