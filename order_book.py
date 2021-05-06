@@ -60,7 +60,7 @@ class OrderBook:
         self.num_of_order = 0
         self.num_of_cancelled_order = 0
         self.current_record: Dict = defaultdict(float)  # OHLCVA
-        self.steps_record: List[Dict] = dict()  # OHLCVA
+        self.steps_record: Dict[str, List] = dict()  # OHLCVA
         self.dividend_record = dict()
 
     def set_price(self):

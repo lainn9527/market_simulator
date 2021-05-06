@@ -1,7 +1,7 @@
 {
     "Market":{
         "Structure": {
-            "interest_rate": 1.1,
+            "interest_rate": 0.01,
             "interest_period": 100
         },
         "Securities": {
@@ -17,14 +17,14 @@
 
     "Agent": {
         "Global": {
-            "cash": 10000,
+            "cash": 500000,
             "securities": {
                 "TSMC": 10
             }
         },
         "ZeroIntelligenceAgent": [
             {
-                "number": 2000,
+                "number": 100,
                 "bid_side": 0.5,
                 "range_of_price": 5,
                 "range_of_quantity": 5

@@ -20,6 +20,8 @@ class Market:
         for orderbook in self.orderbooks.values():
             orderbook.step_summarize()
 
+        self.check_volatility()
+        self.check_liquidity()
         if self.get_time() % 100 == 0:
             for orderbook in self.orderbooks.values():
                 orderbook.clear_orders()
@@ -98,7 +100,22 @@ class Market:
                 self.send_message(Message('AGENT', 'ISSUE_DIVIDEND', 'MARKET', order_record.order.orderer, {'code': code, 'dividend': dividend}))
             orderbook.dividend_record[self.get_time()] = dividend
         
+    def check_volatility(self):
+        for code, orderbook in self.orderbooks.items():
+            if len(orderbook.steps_record['average']) < 2:
+                return
+            diff = abs(orderbook.steps_record['average'][-1] - orderbook.steps_record['average'][-2])
+            volatility = diff / orderbook.steps_record['average'][-2]
+            if volatility > 0.1:
+                print('high vol warning')
 
+    def check_liquidity(self):
+        if self.get_time() < 100:
+            return
+        for code, orderbook in self.orderbooks.items():
+            if len(orderbook.bids_price) < 3 or len(orderbook.asks_price) < 3:
+                print('Liquidity error')
+        
     def get_order_record(self, code, order_id):
         return self.orderbooks[code].orders[order_id]
 
@@ -112,7 +129,7 @@ class Market:
         return [{'price': price, 'volume': self.orderbooks[code].bids_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
 
     def get_best_asks(self, code, number = 1):
-        return [{'price': price, 'volume': self.orderbooks[code].asks_volume[price]} for price in self.orderbooks[code].bids_price[:number]]
+        return [{'price': price, 'volume': self.orderbooks[code].asks_volume[price]} for price in self.orderbooks[code].asks_price[:number]]
     
     def get_tick_size(self, code):
         return self.orderbooks[code].tick_size

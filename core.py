@@ -100,6 +100,7 @@ class Core:
 
     def get_records(self, code, _type, step = 1):
         return self.market.get_records(code, _type, step)
+    
 
     def get_best_bids(self, code, number):
         return self.market.get_best_bids(code, number)

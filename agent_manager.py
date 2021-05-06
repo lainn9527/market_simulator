@@ -42,7 +42,7 @@ class AgentManager:
         if message.postcode == 'AGENT':
             self.agents[message.receiver].receive_message(message)
         elif message.postcode == 'ALL_AGENTS':
-            for agent in self.agents.values():
+            for agent_id, agent in self.agents.items():
                 agent.receive_message(message)
     
     def update_record(self):
@@ -55,6 +55,8 @@ class AgentManager:
                 for code in agent.holdings.keys():
                     holdings[code] += agent.holdings[code]
                 holdings['WEALTH'] += agent.wealth
+                # if agent.cash > self.global_config['cash'] * 2:
+                    # print('first genius')
             record[group_name] = {code: round(value/len(agents), 2) for code, value in holdings.items()}
         
         self.step_records.append(record)
@@ -64,9 +66,8 @@ class AgentManager:
         self.group_agent[group_name] = []
 
         for i in range(config['number']):
-            securities = self.global_config['securities'].copy()
             new_agent = agent.ZeroIntelligenceAgent(start_cash = self.global_config['cash'],
-                                                    start_securities = securities,
+                                                    start_securities = self.global_config['securities'],
                                                     bid_side = config['bid_side'],
                                                     range_of_price = config['range_of_price'],
                                                     range_of_quantity = config['range_of_quantity'])
@@ -82,12 +83,11 @@ class AgentManager:
         risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
 
         for i in range(config['number']):
-            securities = self.global_config['securities'].copy()
-            strategy = config['strategy'].copy()
+            strategy = config['strategy']
             time_window = random.randint(1, config["range_of_time_window"])
             strategy.update({"time_window": time_window})
             new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
-                                         start_securities = securities,
+                                         start_securities = self.global_config['securities'],
                                          risk_preference = risk_preferences[i],
                                          strategy = strategy)
 
@@ -103,12 +103,11 @@ class AgentManager:
         risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
 
         for i in range(config['number']):
-            securities = self.global_config['securities'].copy()
-            strategy = config['strategy'].copy()
+            strategy = config['strategy']
             time_window = random.randint(1, config["range_of_time_window"])
-            config['strategy'].update({"time_window": time_window})
-            new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
-                                         start_securities = securities,
+            strategy.update({"time_window": time_window})
+            new_agent = agent.MeanRevertAgent(start_cash = self.global_config['cash'],
+                                         start_securities = self.global_config['securities'],
                                          risk_preference = risk_preferences[i],
                                          strategy = strategy)
 
