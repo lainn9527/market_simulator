@@ -1,3 +1,4 @@
+
 class Order:
     def __init__(self, orderer, code, order_type, bid_or_ask, quantity):
         self.code = code

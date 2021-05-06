@@ -25,7 +25,10 @@ class Core:
         self.timestep = None
         self.random_seed = None
         self.agent_manager = AgentManager(self, config['Agent'])
-        self.market = Market(self, config['Market'])
+        self.market = Market(self,
+                             interest_rate = config['Market']['Structure']['interest_rate'],
+                             interest_period = config['Market']['Structure']['interest_period'],
+                             securities = config['Market']['Securities'])
     
     def run(self, num_simulation = 100, num_of_timesteps = 100000, random_seed = 9527):
         # time
@@ -47,8 +50,6 @@ class Core:
         return self.market.orderbooks, self.agent_manager
     
     def step(self):
-        # agents make desicion
-        # TODO: use agent manager!!!!!
         self.agent_manager.step()
 
         # check the message queue and execute the actions from agents on the market
@@ -109,5 +110,9 @@ class Core:
     def get_tick_size(self, code):
         return self.market.get_tick_size(code)
 
+    def get_stock_size(self):
+        return self.market.stock_size
+
     def get_price_info(self, code):
         return self.market.get_price_info(code)
+

@@ -5,27 +5,28 @@ from order import LimitOrder, MarketOrder
 from datetime import time, timedelta
 
 class Market:
-    def __init__(self, core, config):
-        self.config = config
-        self.orderbooks = None
+    def __init__(self, core, interest_rate, interest_period, securities):
         self.core = core
         self.is_trading = False
         self.stock_size = 100
-        self.interest_rate = 1
+        self.interest_rate = interest_rate
         self.interest_period = 100
+        self.orderbooks = {code: OrderBook(self, code, **value) for code, value in securities.items()}
     
     def start(self):
-        self.interest_rate = self.config['Structure']['interest_rate']
-        self.interest_period = self.config['Structure']['interest_period']
-        self.orderbooks = {code: OrderBook(self, code, **value) for code, value in self.config['Securities'].items()}
+        pass
 
     def step(self):
         for orderbook in self.orderbooks.values():
             orderbook.step_summarize()
-        
 
-        if self.get_time() % self.interest_period == 0:
+        if self.get_time() % 100 == 0:
+            for orderbook in self.orderbooks.values():
+                orderbook.clear_orders()
+
+        if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
+
 
 
         

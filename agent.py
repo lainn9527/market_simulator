@@ -72,7 +72,7 @@ class Agent:
             interest_rate = message.content['interest_rate']
             self.cash += round(self.cash * interest_rate, 2)
         elif message_subject == 'ISSUE_DIVIDEND':
-            dividend = self.market.stock_size * message.content['dividend']
+            dividend = self.core.get_stock_size() * message.content['dividend']
             self.cash += dividend
 
         elif message.subject == 'ORDER_INVALIDED':
@@ -82,7 +82,7 @@ class Agent:
 
     def place_limit_bid_order(self, code, quantity, price):
         tick_size = self.core.get_tick_size(code)
-        price = round(tick_size * (price // tick_size), 2)
+        price = round(tick_size * ((price+1e-6) // tick_size), 2)
         cost = quantity * price * 100
         if price <= 0 or quantity == 0 or cost > self.cash:
             return
@@ -98,7 +98,7 @@ class Agent:
     
     def place_limit_ask_order(self, code, quantity, price):
         tick_size = self.core.get_tick_size(code)
-        price = round(tick_size * (price // tick_size), 2)
+        price = round(tick_size * ((price+1e-6) // tick_size), 2)
 
         if quantity == 0 or price <= 0:
             return
@@ -162,8 +162,9 @@ class Agent:
         securities_value = 0
         for code in self.holdings.keys():
             average_price = self.core.get_records(code, 'average', step = 1)[0] if self.get_time() > 0 else self.core.get_current_price(code)
-            securities_value +=  average_price * (self.holdings[code] + self.reserved_holdings[code])        
+            securities_value +=  average_price * (self.holdings[code] + self.reserved_holdings[code]) * self.core.get_stock_size() 
         self.wealth = cash + securities_value
+        print(self.wealth)
 
     def get_time(self):
         return self.core.timestep
@@ -190,7 +191,7 @@ class TestAgent(Agent):
     num_of_agent = 0
     
     def __init__(self, order_list, start_cash = 1000000, start_securities = None):
-        super().__init__('TEST', start_cash, start_securities)
+        super().__init__('te', start_cash, start_securities)
         TestAgent.add_counter()
         self.order_list = order_list
 
@@ -208,7 +209,7 @@ class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
     def __init__(self, start_cash = 1000000, start_securities = None, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
-        super().__init__('ZERO_INTELLIGENCE', start_cash, start_securities)
+        super().__init__('zi', start_cash, start_securities)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -268,7 +269,7 @@ class ZeroIntelligenceAgent(Agent):
 class TrendAgent(Agent):
     num_of_agent = 0
     def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None):
-        super().__init__('TrendAgent', start_cash, start_securities,risk_preference)
+        super().__init__('tr', start_cash, start_securities,risk_preference)
         TrendAgent.add_counter()
         self.strategy = strategy
         self.trading_probability = max(0.02 * risk_preference, 0.001)
@@ -307,7 +308,7 @@ class TrendAgent(Agent):
 class MeanRevertAgent(Agent):
     num_of_agent = 0
     def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None):
-        super().__init__('MeanRevertAgent', start_cash, start_securities,risk_preference)
+        super().__init__('mr', start_cash, start_securities,risk_preference)
         MeanRevertAgent.add_counter()
         self.strategy = strategy
         self.trading_probability = max(0.02 * risk_preference, 0.001)

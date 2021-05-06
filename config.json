@@ -17,9 +17,9 @@
 
     "Agent": {
         "Global": {
-            "cash": 100000,
+            "cash": 10000,
             "securities": {
-                "TSMC": 100
+                "TSMC": 10
             }
         },
         "ZeroIntelligenceAgent": [

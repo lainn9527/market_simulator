@@ -5,7 +5,7 @@ from collections import defaultdict
 class AgentManager:
     def __init__(self, core, config: Dict):
         self.config = config
-        self.global_config = self.config.pop("Global")
+        self.global_config = {}
         self.agents = {}
         self.group_agent = {}
         self.core = core
@@ -14,6 +14,7 @@ class AgentManager:
         self.step_records = []
 
     def start(self, securities_list):
+        self.global_config = self.config.pop("Global")
         self.securities_list += securities_list
         self.build_agents()
         for agent in self.agents.values():
@@ -61,11 +62,11 @@ class AgentManager:
 
     def build_zi_group(self, group_name, config):
         self.group_agent[group_name] = []
-        securities = self.global_config['securities']
 
         for i in range(config['number']):
+            securities = self.global_config['securities'].copy()
             new_agent = agent.ZeroIntelligenceAgent(start_cash = self.global_config['cash'],
-                                                    start_securities = self.global_config['securities'],
+                                                    start_securities = securities,
                                                     bid_side = config['bid_side'],
                                                     range_of_price = config['range_of_price'],
                                                     range_of_quantity = config['range_of_quantity'])
@@ -74,7 +75,6 @@ class AgentManager:
     
     def build_tr_group(self, group_name, config):
         self.group_agent[group_name] = []
-        securities = self.global_config['securities']
 
         risk_preferences = [random.gauss(mu = config['risk_preference_mean'], sigma = config['risk_preference_var']) for i in range(config['number'])]
         min_risk, max_risk = min(risk_preferences), max(risk_preferences)
@@ -82,19 +82,20 @@ class AgentManager:
         risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
 
         for i in range(config['number']):
+            securities = self.global_config['securities'].copy()
+            strategy = config['strategy'].copy()
             time_window = random.randint(1, config["range_of_time_window"])
-            config['strategy'].update({"time_window": time_window})
+            strategy.update({"time_window": time_window})
             new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
-                                         start_securities = self.global_config['securities'],
+                                         start_securities = securities,
                                          risk_preference = risk_preferences[i],
-                                         strategy = config['strategy'])
+                                         strategy = strategy)
 
             self.agents[new_agent.unique_id] = new_agent
             self.group_agent[group_name].append(new_agent.unique_id)
 
     def build_mr_group(self, group_name, config):
         self.group_agent[group_name] = []
-        securities = self.global_config['securities']
 
         risk_preferences = [random.gauss(mu = config['risk_preference_mean'], sigma = config['risk_preference_var']) for i in range(config['number'])]
         min_risk, max_risk = min(risk_preferences), max(risk_preferences)
@@ -102,13 +103,26 @@ class AgentManager:
         risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
 
         for i in range(config['number']):
+            securities = self.global_config['securities'].copy()
+            strategy = config['strategy'].copy()
             time_window = random.randint(1, config["range_of_time_window"])
             config['strategy'].update({"time_window": time_window})
             new_agent = agent.TrendAgent(start_cash = self.global_config['cash'],
-                                         start_securities = self.global_config['securities'],
+                                         start_securities = securities,
                                          risk_preference = risk_preferences[i],
-                                         strategy = config['strategy'])
+                                         strategy = strategy)
 
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
+
+    def build_te_group(self, group_name, config):
+        self.group_agent[group_name] = []
+
+        for i in range(config['number']):
+            securities = self.global_config['securities'].copy()
+            new_agent = agent.TestAgent(start_cash = self.global_config['cash'],
+                                        start_securities = securities,
+                                        order_list = config['order_list'])
             self.agents[new_agent.unique_id] = new_agent
             self.group_agent[group_name].append(new_agent.unique_id)
 
@@ -123,5 +137,7 @@ class AgentManager:
             return "tr"
         elif _type == "MeanRevertAgent":
             return "mr"
+        elif _type == "TestAgent":
+            return "te"
         else:
             raise Exception(f"No {_type} agent")

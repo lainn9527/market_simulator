@@ -1,0 +1,38 @@
+{
+    "Market":{
+        "Structure": {
+            "interest_rate": 0.01,
+            "interest_period": 100
+        },
+        "Securities": {
+            "TSMC": {
+                "value": 10,
+                "dividend_ratio": 0.1,
+                "dividend_ar": 0.95,
+                "dividend_var": 0.0743,
+                "dividend_period": 100
+            }
+        }
+    },
+
+    "Agent": {
+        "Global": {
+            "cash": 100000,
+            "securities": {
+                "TSMC": 100
+            }
+        },
+        "TestAgent": [
+            {
+                "number": 1,
+                "order_list": []
+            },
+            {
+                "number": 1,
+                "order_list": []
+            }
+        ]
+        
+
+    }
+}

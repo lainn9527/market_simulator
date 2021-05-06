@@ -409,9 +409,6 @@ class OrderBook:
         self.update_record(
             **{'price': self.steps_record['close'][-1], 'volume': 0, 'amount': 0})
 
-        if self.market.get_time() % 100 == 0:
-            self.clear_orders()
-
     def clear_orders(self):
         for order_id in self.current_orders[:]:
             if self.market.get_time() - self.orders[order_id].placed_time >= 100:
