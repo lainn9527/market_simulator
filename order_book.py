@@ -53,9 +53,11 @@ class OrderBook:
         self.bids_price = list()
         self.bids_volume = defaultdict(int)
         self.bids_orders = defaultdict(list)
+        self.bids_sum = 0
         self.asks_price = list()
         self.asks_volume = defaultdict(int)
         self.asks_orders = defaultdict(list)
+        self.asks_sum = 0
 
         self.num_of_order = 0
         self.num_of_cancelled_order = 0
@@ -98,7 +100,6 @@ class OrderBook:
         time = self.market.get_time()
         # check price
         order.price = round(order.price, 2)
-
         # add the order to the orderbook
         self.orders[order_id] = OrderRecord(order=order,
                                             placed_time=time,
@@ -168,6 +169,7 @@ class OrderBook:
                 remain_quantity -= matched_quantity
 
                 self.asks_volume[best_ask_price] -= matched_quantity
+                self.asks_sum -= matched_quantity
                 if matched_order_record.filled_quantity == matched_order_record.order.quantity:
                     self.asks_orders[best_ask_price].pop(0)
 
@@ -198,6 +200,7 @@ class OrderBook:
                     break
         self.bids_orders[price].append(order_id)
         self.bids_volume[price] += quantity
+        self.bids_sum += quantity
 
     def handle_ask_order(self, order_id):
         order = self.orders[order_id].order
@@ -250,6 +253,7 @@ class OrderBook:
                 remain_quantity -= matched_quantity
 
                 self.bids_volume[best_bid_price] -= matched_quantity
+                self.bids_sum -= matched_quantity
                 if matched_order_record.filled_quantity == matched_order_record.order.quantity:
                     self.bids_orders[best_bid_price].pop(0)
 
@@ -281,7 +285,7 @@ class OrderBook:
                     break
         self.asks_orders[price].append(order_id)
         self.asks_volume[price] += quantity
-
+        self.asks_sum += quantity
     # def handle_market_order(self, order, time):
     #     time = self.market.get_time()
 
@@ -362,11 +366,13 @@ class OrderBook:
         if order.bid_or_ask == 'BID':
             self.bids_orders[price].remove(order_id)
             self.bids_volume[price] -= unfilled_quantity
+            self.bids_sum -= unfilled_quantity
             if self.bids_volume[price] == 0:
                 self.bids_price.remove(price)
         elif order.bid_or_ask == 'ASK':
             self.asks_orders[price].remove(order_id)
             self.asks_volume[price] -= unfilled_quantity
+            self.asks_sum -= unfilled_quantity
             if self.asks_volume[price] == 0:
                 self.asks_price.remove(price)
         
@@ -411,7 +417,7 @@ class OrderBook:
 
     def clear_orders(self):
         for order_id in self.current_orders[:]:
-            if self.market.get_time() - self.orders[order_id].placed_time >= 100:
+            if self.market.get_time() - self.orders[order_id].placed_time >= self.market.clear_period:
                 self.cancel_order(order_id)
             
     def check_spread(self):

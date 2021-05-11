@@ -1,9 +1,8 @@
 {
     "Market":{
         "Structure": {
-            "interest_rate": 0.0,
-            "interest_period": 100,
-            "clear_period": 20
+            "interest_rate": 0.01,
+            "interest_period": 100
         },
         "Securities": {
             "TSMC": {
@@ -11,24 +10,24 @@
                 "dividend_ratio": 0.1,
                 "dividend_ar": 0.95,
                 "dividend_var": 0.0743,
-                "dividend_period": 250
+                "dividend_period": 100
             }
         }
     },
 
     "Agent": {
         "Global": {
-            "cash": 100000,
+            "cash": 500000,
             "securities": {
                 "TSMC": 10
             }
         },
-        "RandomAgent": [
+        "ZeroIntelligenceAgent": [
             {
-                "number": 10000,
-                "range_of_time_window": 100, 
-                "k": 3.85,
-                "mean": 1.01
+                "number": 1000,
+                "bid_side": 0.5,
+                "range_of_price": 5,
+                "range_of_quantity": 5
             }
         ],
         
@@ -37,7 +36,7 @@
                 "number": 100,
                 "risk_preference_mean": 0,
                 "risk_preference_var": 1,
-                "range_of_time_window": 100,
+                "range_of_time_window": 500,
                 "strategy": {}
             }
         ],
@@ -47,14 +46,11 @@
                 "number": 100,
                 "risk_preference_mean": 0,
                 "risk_preference_var": 1,
-                "range_of_time_window": 100,
+                "range_of_time_window": 500,
                 "strategy": {}
             }
         ],
         "FundamentalistAgent":[
-            {
-                "number": 100
-            }
 
         ]
     }

@@ -5,12 +5,13 @@ from order import LimitOrder, MarketOrder
 from datetime import time, timedelta
 
 class Market:
-    def __init__(self, core, interest_rate, interest_period, securities):
+    def __init__(self, core, interest_rate, interest_period, securities, clear_period):
         self.core = core
         self.is_trading = False
         self.stock_size = 100
         self.interest_rate = interest_rate
-        self.interest_period = 100
+        self.interest_period = interest_period
+        self.clear_period = clear_period
         self.orderbooks = {code: OrderBook(self, code, **value) for code, value in securities.items()}
     
     def start(self):
@@ -22,14 +23,13 @@ class Market:
 
         self.check_volatility()
         self.check_liquidity()
-        if self.get_time() % 100 == 0:
+        if self.get_time() % self.clear_period == 0:
             for orderbook in self.orderbooks.values():
                 orderbook.clear_orders()
 
         if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
-
-
+            # adjust value
 
         
     def open_session(self):
@@ -74,6 +74,7 @@ class Market:
             if not isinstance(message.content['order'], LimitOrder):
                 raise Exception
             self.orderbooks[message.content['order'].code].handle_limit_order(message.content['order'])
+            
 
         elif message.subject == 'MARKET_ORDER':
             if not isinstance(message.content['order'], MarketOrder):
@@ -139,6 +140,9 @@ class Market:
 
     def get_time(self):
         return self.core.timestep
+    
+    def get_value(self, code):
+        return self.orderbooks[code].value
 
     def market_stats(self):
         stats = {}
@@ -146,7 +150,9 @@ class Market:
             volume = orderbook.steps_record['volume'][-1]
             amount = orderbook.steps_record['amount'][-1]
             average_price = orderbook.steps_record['average'][-1]
-            stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume}
+            bid = orderbook.bids_sum
+            ask = orderbook.asks_sum
+            stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
         return stats
 
     def determine_tick_size(self, base_price):

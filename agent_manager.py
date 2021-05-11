@@ -2,6 +2,8 @@ import agent
 import random
 from typing import Dict, List
 from collections import defaultdict
+from multiprocessing import Pool
+
 class AgentManager:
     def __init__(self, core, config: Dict):
         self.config = config
@@ -34,8 +36,8 @@ class AgentManager:
     def step(self):
         agent_ids = list(self.agents.keys())
         random.shuffle(agent_ids)
-        for _id in agent_ids:
-            self.agents[_id].step()
+        for agent_id in agent_ids:
+            self.agents[agent_id].step()
         self.update_record()
 
     def receive_message(self, message):
@@ -71,6 +73,29 @@ class AgentManager:
                                                     bid_side = config['bid_side'],
                                                     range_of_price = config['range_of_price'],
                                                     range_of_quantity = config['range_of_quantity'])
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
+
+    def build_ra_group(self, group_name, config):
+        self.group_agent[group_name] = []
+
+        for i in range(config['number']):
+            time_window = random.randint(10, config["range_of_time_window"])
+            new_agent = agent.RandomAgent(start_cash = self.global_config['cash'],
+                                          start_securities = self.global_config['securities'],
+                                          time_window = time_window,
+                                          k = config['k'],
+                                          mean = config['mean'])
+            self.agents[new_agent.unique_id] = new_agent
+            self.group_agent[group_name].append(new_agent.unique_id)
+
+    def build_fu_group(self, group_name, config):
+        self.group_agent[group_name] = []
+        securities_vale = {code: self.core.get_value(code) for code in self.securities_list}
+        for i in range(config['number']):
+            new_agent = agent.FundamentalistAgent(start_cash = self.global_config['cash'],
+                                                  start_securities = self.global_config['securities'],
+                                                  securities_value = securities_vale)
             self.agents[new_agent.unique_id] = new_agent
             self.group_agent[group_name].append(new_agent.unique_id)
     
@@ -131,12 +156,14 @@ class AgentManager:
         elif _type == "ChartistAgent":
             return "ch"
         elif _type == "FundamentalistAgent":
-            return "fd"
+            return "fu"
         elif _type == "TrendAgent":
             return "tr"
         elif _type == "MeanRevertAgent":
             return "mr"
         elif _type == "TestAgent":
             return "te"
+        elif _type == "RandomAgent":
+            return "ra"
         else:
             raise Exception(f"No {_type} agent")

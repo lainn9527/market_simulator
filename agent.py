@@ -231,6 +231,55 @@ class ZeroIntelligenceAgent(Agent):
         # if len(self.orders[code]) != 0:
             # pass
 
+class RandomAgent(Agent):
+    num_of_agent = 0
+    def __init__(self, start_cash = 1000000, start_securities = None, time_window = 50, k = 3.85, mean = 1.01):
+        super().__init__('ra', start_cash, start_securities)
+        RandomAgent.add_counter()
+        self.mean = mean
+        self.time_window = time_window
+        self.k = k
+        # self.time_window = time_window
+
+    def step(self):
+        super().step()
+        # to trade?
+        if np.random.binomial(n = 1, p = 0.02) == 1:
+            self.generate_order()
+
+    def generate_order(self):
+        # which one?
+        code = np.random.choice(list(self.holdings.keys()))
+        current_price = self.core.get_current_price(code)
+        price_list = self.core.get_records(code = code, _type = 'average', step = self.time_window)
+
+        if len(price_list) < self.time_window:
+            return
+
+        std = self.k * (self.std_of_log_return(price_list))
+        mean = self.mean
+        tick_size = self.core.get_tick_size(code)
+        trade_propotion = np.random.random()
+        # quantity = np.random.randint(1, self.range_of_quantity)
+
+        if np.random.binomial(n = 1, p = 0.5) == 1:
+            bid_or_ask = 'BID'
+            price = current_price + tick_size * round( (current_price * np.random.normal(mean, std) - current_price) / tick_size)
+
+            quantity = math.floor((trade_propotion * self.cash) / (100*price))
+            self.place_limit_bid_order(code, quantity, price)
+        else:
+            bid_or_ask = 'ASK'
+            price = current_price + tick_size * round((current_price / np.random.normal(mean, std) - current_price) / tick_size)
+
+            quantity = math.floor(trade_propotion * self.holdings[code])
+            self.place_limit_ask_order(code, quantity, price)
+        if price > 200:
+            self.for_break()
+
+    def std_of_log_return(self, price_list):
+        return np.std(np.diff(np.log(price_list)))
+
 class TrendAgent(Agent):
     num_of_agent = 0
     def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None):
@@ -317,7 +366,38 @@ class MeanRevertAgent(Agent):
 
     
 class FundamentalistAgent(Agent):
-    pass
+    num_of_agent = 0
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, securities_value = None):
+        super().__init__('mr', start_cash, start_securities)
+        FundamentalistAgent.add_counter()
+        self.securities_value = securities_value
+    
+    def step(self):
+        super().step()
+        if np.random.binomial(n = 1, p = 0.02) == 1:
+            self.generate_order()
+
+    def generate_order(self):
+        code = "TSMC"
+        value = self.securities_value[code]
+        price = value
+        current_price = self.core.get_current_price(code)
+
+        # price_list = self.core.get_records(code = code, _type = 'average', step = self.time_window)
+        # if len(price_list) < self.time_window:
+        #     return
+
+        trade_propotion = np.random.random()
+        # trend is negative(bid signal) and need to bid
+        if current_price < value:
+            bid_or_ask = 'BID'
+            quantity = math.floor((trade_propotion * self.cash) / (100*price))
+            self.place_limit_bid_order(code, quantity, value)
+        elif current_price > value:
+            bid_or_ask = 'ASK'
+            quantity = math.floor(trade_propotion * self.holdings[code])
+            self.place_limit_ask_order(code, quantity, value)
+
 
 class BrokerAgent(Agent):
     num_of_agent = 0

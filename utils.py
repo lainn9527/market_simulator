@@ -25,7 +25,6 @@ class OrderRecord:
         
 
 def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Path):
-    output_dir = Path('./result/')
     if not output_dir.exists():
         output_dir.mkdir()
     # OHLCVM

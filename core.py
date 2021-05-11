@@ -28,6 +28,7 @@ class Core:
         self.market = Market(self,
                              interest_rate = config['Market']['Structure']['interest_rate'],
                              interest_period = config['Market']['Structure']['interest_period'],
+                             clear_period = config['Market']['Structure']['clear_period'],
                              securities = config['Market']['Securities'])
     
     def run(self, num_simulation = 100, num_of_timesteps = 100000, random_seed = 9527):
@@ -117,3 +118,5 @@ class Core:
     def get_price_info(self, code):
         return self.market.get_price_info(code)
 
+    def get_value(self, code):
+        return self.market.get_value(code)
