@@ -11,7 +11,6 @@ class Agent:
     def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1):
         Agent.add_counter()
         self.type = _type
-        self.start_cash = start_cash
         self.unique_id = f"{self.type}_{self.get_counter()}"
         self.core = None
         
@@ -28,6 +27,7 @@ class Agent:
         self.wealth = 0
         self.orders = {code: [] for code in self.holdings.keys()}
         self.orders_history = {code: [] for code in self.holdings.keys()}
+        self.initial_wealth = 0
 
         # state flag
         self.risk_preference = risk_preference
@@ -35,6 +35,7 @@ class Agent:
     
     def start(self, core):
         self.core = core
+        self.initial_wealth = self.cash + sum([self.core.get_value(code) * num * self.core.get_stock_size() for code, num in self.holdings.items()])
         
 
     def step(self):
@@ -265,8 +266,7 @@ class RandomAgent(Agent):
         if np.random.binomial(n = 1, p = 0.5) == 1:
             bid_or_ask = 'BID'
             price = current_price + tick_size * round( (current_price * np.random.normal(mean, std) - current_price) / tick_size)
-
-            quantity = math.floor((trade_propotion * self.cash) / (100*price))
+            quantity = math.floor((trade_propotion * self.cash) / (100*price+1e-6))
             self.place_limit_bid_order(code, quantity, price)
         else:
             bid_or_ask = 'ASK'

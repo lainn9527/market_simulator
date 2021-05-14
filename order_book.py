@@ -239,7 +239,6 @@ class OrderBook:
                 matched_order_record = self.orders[matched_order_id]
                 matched_order_quantity = matched_order_record.order.quantity - \
                     matched_order_record.filled_quantity
-
                 if remain_quantity >= matched_order_quantity:
                     matched_quantity = matched_order_quantity
                 elif remain_quantity < matched_order_quantity:
@@ -344,7 +343,6 @@ class OrderBook:
             Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {
                     'code': order_record.order.code, 'order_id': order_id, 'bid_or_ask': order_record.order.bid_or_ask, 'price': price, 'quantity': quantity}),
         )
-
         # check if this order is finished
         if order_record.filled_quantity == order_record.order.quantity:
             order_record.finished_time = time

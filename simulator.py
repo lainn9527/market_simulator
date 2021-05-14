@@ -46,10 +46,11 @@ from datetime import datetime
 #     }
 # }
 if __name__ == '__main__':
-    config_path = Path("config.json")
-    result_dir = Path("result/ra1000/")
+    config_path = Path("config_zi.json")
+    result_dir = Path("result/zi_10000/")
     if not result_dir.exists():
         result_dir.mkdir()
+    
 
     random_seed = 9527
     np.random.seed(random_seed)
@@ -61,7 +62,8 @@ if __name__ == '__main__':
     core = Core(config)
     orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = num_of_timesteps)
     write_records(orderbooks, agent_manager, result_dir)
-
+    with open(result_dir / 'config.json', 'w') as fp:
+        json.dump(config, fp)
     cost_time = str(timedelta(seconds = perf_counter() - start_time))
     print(f"Run {num_of_timesteps} in {cost_time}.")
     

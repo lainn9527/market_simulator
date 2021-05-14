@@ -2,7 +2,8 @@
     "Market":{
         "Structure": {
             "interest_rate": 0.01,
-            "interest_period": 100
+            "interest_period": 100,
+            "clear_period": 20
         },
         "Securities": {
             "TSMC": {
@@ -17,14 +18,18 @@
 
     "Agent": {
         "Global": {
-            "cash": 500000,
+            "cash": 10000,
+            "alpha": 2,
+            "risk_preference_mean": 0,
+            "risk_preference_var": 1,
             "securities": {
-                "TSMC": 10
+                "TSMC": 1
             }
         },
         "ZeroIntelligenceAgent": [
             {
-                "number": 1000,
+                "name": "zi_10000",
+                "number": 10000,
                 "bid_side": 0.5,
                 "range_of_price": 5,
                 "range_of_quantity": 5
@@ -33,24 +38,26 @@
         
         "TrendAgent": [
             {
+                "name": "tr_100",
                 "number": 100,
-                "risk_preference_mean": 0,
-                "risk_preference_var": 1,
-                "range_of_time_window": 500,
+                "range_of_time_window": 100,
                 "strategy": {}
             }
         ],
         
         "MeanRevertAgent": [
             {
+                "name": "mr_100",
                 "number": 100,
-                "risk_preference_mean": 0,
-                "risk_preference_var": 1,
-                "range_of_time_window": 500,
+                "range_of_time_window": 100,
                 "strategy": {}
             }
         ],
         "FundamentalistAgent":[
+            {
+                "name": "fu_100",
+                "number": 100
+            }
 
         ]
     }

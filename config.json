@@ -1,7 +1,7 @@
 {
     "Market":{
         "Structure": {
-            "interest_rate": 0.0,
+            "interest_rate": 0.01,
             "interest_period": 100,
             "clear_period": 20
         },
@@ -25,7 +25,7 @@
         },
         "RandomAgent": [
             {
-                "number": 10000,
+                "number": 1000,
                 "range_of_time_window": 100, 
                 "k": 3.85,
                 "mean": 1.01
@@ -34,7 +34,7 @@
         
         "TrendAgent": [
             {
-                "number": 100,
+                "number": 200,
                 "risk_preference_mean": 0,
                 "risk_preference_var": 1,
                 "range_of_time_window": 100,
