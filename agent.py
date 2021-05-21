@@ -5,13 +5,15 @@ from message import Message
 from order import LimitOrder, MarketOrder
 from datetime import datetime, timedelta, time
 from typing import Dict, List
+
+
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1):
+    def __init__(self, _type, start_cash = 10000000, start_securities = None, risk_preference = 1, _id = None):
         Agent.add_counter()
         self.type = _type
-        self.unique_id = f"{self.type}_{self.get_counter()}"
+        self.unique_id = f"{self.type}_{self.get_counter()}" if _id == None else _id
         self.core = None
         
         
@@ -104,7 +106,8 @@ class Agent:
         if quantity == 0 or price <= 0:
             return
         if quantity > self.holdings[code]:
-            raise Exception(f"Not enough {code} shares")
+            # raise Exception(f"Not enough {code} shares")
+            return
 
         self.holdings[code] -= quantity
         self.reserved_holdings[code] += quantity
@@ -178,6 +181,7 @@ class Agent:
 
     def for_break(self):
         pass
+
     @classmethod
     def add_counter(cls):
         cls.num_of_agent += 1
@@ -186,6 +190,51 @@ class Agent:
     def get_counter(cls):
         return cls.num_of_agent
     
+    
+class RLAgent(Agent):
+    num_of_agent = 0
+    VALID_ACTION = 1
+    INVALID_ACTION = 2
+    HOLD = 0
+    def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, _id = None):
+        super().__init__('rl', start_cash = start_cash, start_securities = start_securities, _id = _id)
+        RLAgent.add_counter()
+        self.action_status = RLAgent.INVALID_ACTION
+    
+    def step(self, action = None):
+        super().step()
+        if isinstance(action, type(None)):
+            return
+
+        bid_or_ask = action[0]
+        ticks = action[1]
+        volume = action[2] + 1
+        current_price = self.core.get_current_price('TSMC')
+        tick_size = self.core.get_tick_size('TSMC')
+
+        if bid_or_ask == 2:
+            self.action_status = RLAgent.HOLD
+            return
+        elif bid_or_ask == 0:
+            # bid
+            self.action_status = RLAgent.INVALID_ACTION
+            best_bid = self.core.get_best_bids('TSMC', 1)
+            best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
+            price = round(best_bid + (4-ticks) * tick_size, 2)
+            self.place_limit_bid_order('TSMC', volume, price)
+
+        elif bid_or_ask == 1:
+            # ask
+            self.action_status = RLAgent.INVALID_ACTION
+            best_ask = self.core.get_best_asks('TSMC', 1)
+            best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
+            price = round(best_ask + (ticks-4) * tick_size, 2)
+            self.place_limit_ask_order('TSMC', volume, price)
+
+    def receive_message(self, message):
+        super().receive_message(message)
+        if message.subject == 'ORDER_PLACED':
+            self.action_status = RLAgent.VALID_ACTION
 
 
 class ZeroIntelligenceAgent(Agent):
@@ -201,7 +250,7 @@ class ZeroIntelligenceAgent(Agent):
     def step(self):
         super().step()
         # to trade?
-        if np.random.binomial(n = 1, p = 0.02) == 1:
+        if np.random.binomial(n = 1, p = 0.05) == 1:
             self.generate_order()
 
     def generate_order(self):
@@ -211,7 +260,6 @@ class ZeroIntelligenceAgent(Agent):
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
 
-        # TODO: best bid and best ask
         if np.random.binomial(n = 1, p = 0.5) == 1 or self.holdings[code] == 0:
             bid_or_ask = 'BID'
             best_bid = self.core.get_best_asks(code, 1)
@@ -224,13 +272,7 @@ class ZeroIntelligenceAgent(Agent):
             best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
             price = round(best_ask - np.random.randint(-self.range_of_price, self.range_of_price) * tick_size, 2)
             self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
-            if price < 50:
-                self.for_break()
 
-
-        # if existed, modify the order
-        # if len(self.orders[code]) != 0:
-            # pass
 
 class RandomAgent(Agent):
     num_of_agent = 0
@@ -434,6 +476,7 @@ class BrokerAgent(Agent):
                 else:
                     self.place_order('auction', self.code, 'ASK', self.target_volume - placed_volumn, price)
                     break
+
 
 class TestAgent(Agent):
     num_of_agent = 0

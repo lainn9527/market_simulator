@@ -2,7 +2,9 @@ __pycache__/*
 .ipynb_checkpoints/*
 .pytest_cache/*
 .benchmarks/*
+model/*
 result/*
+rl_result/
 .vscode
 *.code-workspace
 tmp.py

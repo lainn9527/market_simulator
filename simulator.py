@@ -47,7 +47,7 @@ from datetime import datetime
 # }
 if __name__ == '__main__':
     config_path = Path("config_zi.json")
-    result_dir = Path("result/zi_10000/")
+    result_dir = Path("result/zi_1000/")
     if not result_dir.exists():
         result_dir.mkdir()
     

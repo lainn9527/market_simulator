@@ -1,4 +1,3 @@
-import random
 from order import LimitOrder, MarketOrder
 from dataclasses import dataclass
 from collections import defaultdict
@@ -78,7 +77,7 @@ class OrderBook:
         self.tick_size = tick_size
 
         record_list = ['open', 'high', 'low',
-                       'close', 'average', 'volume', 'amount']
+                       'close', 'average', 'volume', 'amount', 'bid', 'ask']
         self.steps_record.update({key: [] for key in record_list})
         self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
 
@@ -405,7 +404,9 @@ class OrderBook:
         self.current_record['close'] = self.current_record.pop('price')
         self.current_record['average'] = round(self.current_record['amount']/ (100*self.current_record['volume']), 2) if self.current_record['amount'] != 0 else self.current_record['close']
         self.current_record['amount'] = round(self.current_record['amount'], 2)
-
+        self.current_record['bid'] = self.bids_price[0] if len(self.bids_price) > 0 else self.current_record['close']
+        self.current_record['ask'] = self.asks_price[0] if len(self.asks_price) > 0 else self.current_record['close']
+        
         for key in self.steps_record.keys():
             self.steps_record[key].append(self.current_record[key])
 

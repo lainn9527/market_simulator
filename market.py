@@ -122,7 +122,7 @@ class Market:
 
     def get_current_price(self, code):
         return self.orderbooks[code].current_record['price']
-
+    
     def get_records(self, code, _type, step = 1):
         return self.orderbooks[code].steps_record[_type][:-1*(step+1):-1]
 

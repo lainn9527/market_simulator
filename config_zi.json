@@ -28,18 +28,28 @@
         },
         "ZeroIntelligenceAgent": [
             {
-                "name": "zi_10000",
-                "number": 10000,
+                "name": "zi_1000",
+                "number": 2000,
                 "bid_side": 0.5,
                 "range_of_price": 5,
                 "range_of_quantity": 5
+            }
+        ],
+
+        "RandomAgent": [
+            {
+                "name": "ra_1000",
+                "number": 1000,
+                "range_of_time_window": 100, 
+                "k": 3.85,
+                "mean": 1.01
             }
         ],
         
         "TrendAgent": [
             {
                 "name": "tr_100",
-                "number": 100,
+                "number": 200,
                 "range_of_time_window": 100,
                 "strategy": {}
             }
@@ -48,7 +58,7 @@
         "MeanRevertAgent": [
             {
                 "name": "mr_100",
-                "number": 100,
+                "number": 200,
                 "range_of_time_window": 100,
                 "strategy": {}
             }
@@ -56,9 +66,24 @@
         "FundamentalistAgent":[
             {
                 "name": "fu_100",
-                "number": 100
+                "number": 200
             }
 
         ]
+    },
+
+    "Env":{
+        "agent": {
+            "name": "rl_1",
+            "id": "RL",
+            "cash": 100000,
+            "securities": {
+                "TSMC": 10
+            }
+        },
+        "obs": {
+            "lookback": 10,
+            "best_price": 5
+        }
     }
 }

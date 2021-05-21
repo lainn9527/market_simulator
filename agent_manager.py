@@ -15,18 +15,28 @@ class AgentManager:
         self.current_record = {}
         self.step_records = []
 
+
     def start(self, securities_list):
         self.global_config = self.config.pop("Global")
         self.securities_list += securities_list
         self.build_agents()
-        for agent in self.agents.values():
-            agent.start(self.core)
+
 
     def step(self):
         agent_ids = list(self.agents.keys())
         random.shuffle(agent_ids)
         for agent_id in agent_ids:
             self.agents[agent_id].step()
+        self.update_record()
+
+    def env_step(self, action, rl_agent_id):
+        agent_ids = list(self.agents.keys())
+        random.shuffle(agent_ids)
+        for agent_id in agent_ids:
+            if agent_id == rl_agent_id:
+                status_code = self.agents[agent_id].step(action)
+            else:
+                self.agents[agent_id].step()
         self.update_record()
 
     def receive_message(self, message):
@@ -77,10 +87,17 @@ class AgentManager:
                 for i in range(config['number']):
                     config['cash'], config['securities'], config['risk_preference'] = agent_cash[i], agent_holdings[i], risk_preferences[i]
                     agent = eval(f"self.build_{short_type}_agent(config)")
+                    agent.start(self.core)
                     self.agents[agent.unique_id] = agent
                     self.group_agent[group_name].append(agent.unique_id)
-
                     
+
+    def add_rl_agent(self, config):
+        rl_agent = agent.RLAgent(start_cash = config['cash'], start_securities = config['securities'], _id = config['id'])
+        rl_agent.start(self.core)
+        rl_agent.wealth = rl_agent.initial_wealth
+        self.agents[rl_agent.unique_id] = rl_agent
+        self.group_agent[config['name']] = [rl_agent.unique_id]
 
 
     def build_zi_agent(self, config):
@@ -127,12 +144,17 @@ class AgentManager:
                                           strategy = strategy)
         return new_agent
 
+    def build_rl_agent(self):
+        pass
+
     def build_te_agent(self, config):
         securities = self.global_config['securities'].copy()
         new_agent = agent.TestAgent(start_cash = config['cash'],
                                     start_securities = securities,
                                     order_list = config['order_list'])
         return new_agent
+
+        
 
     def type_abbreviation(self, _type):
         if _type == "ZeroIntelligenceAgent":
