@@ -85,5 +85,8 @@
             "lookback": 10,
             "best_price": 5
         }
+    },
+    "Train": {
+        
     }
 }

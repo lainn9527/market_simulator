@@ -1,26 +1,23 @@
 import random
 import numpy as np
-import json
-import argparse
 import gym
-import agent
-from time import perf_counter
 from collections import defaultdict
 from typing import Dict, List
 from gym import spaces
 from gym.utils import seeding
-from datetime import datetime, timedelta
-from queue import Queue
+from datetime import datetime
 from pathlib import Path
-from stable_baselines3.ppo import ppo
-from stable_baselines3.common.env_checker import check_env
 from copy import deepcopy
-from core import Core
-from market import Market
-from order import LimitOrder, MarketOrder
-from agent_manager import AgentManager
-from utils import write_records
-from rl_agent import FeatureExtractor
+
+from numpy.lib.arraysetops import setxor1d
+
+from core import agent
+from core.core import Core
+from core.market import Market
+from core.order import LimitOrder, MarketOrder
+from core.agent_manager import AgentManager
+from core.utils import write_records
+from .rl_agent import FeatureExtractor
 
 class TradingEnv(gym.Env):
     # Because of google colab, we cannot implement the GUI ('human' render mode)
@@ -55,7 +52,9 @@ class TradingEnv(gym.Env):
             'price': spaces.Box(low = 0, high = 2000, shape=(5, self.config['Env']['obs']['lookback'],)),
             'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
         })
+        self.start_state = None
         self.states = []
+        self.train = True
         # self.reset()
     
     def seed(self, seed=None):
@@ -78,18 +77,29 @@ class TradingEnv(gym.Env):
 
         self.core.agent_manager.add_rl_agent(self.config['Env']['agent'])
         print("Set up the following agents:")
-        self.states.append(self.get_obs())
-        return self.obs_wrapper(self.states[-1])
+        self.start_state = self.get_obs()
+        self.states.append(self.start_state)
+        return self.obs_wrapper(self.start_state)
 
     def step(self, action):
         rl_agent_id = self.config['Env']['agent']['id']
+
         self.core.env_step(action, rl_agent_id = rl_agent_id)
-        self.states.append(self.get_obs())
-        
+        self.states.append(self.get_obs())        
         obs = self.obs_wrapper(self.states[-1])
-        reward = self.reward_wrapper(rl_agent_id, action)
+        action_reward, wealth_reward, is_valid = self.reward_wrapper(rl_agent_id, action)
+        reward = action_reward + wealth_reward
         done = False
         info = {}
+
+        # record the action & reward in previous state (s_t-1 -> a_t, r_t)
+        self.states[-2]['action'] = {'action': action, 'is_valid': is_valid}
+        self.states[-2]['reward'] = {'reward': reward, 'action': action_reward, 'wealth': wealth_reward}
+
+        # print out the training info
+        if self.train and self.core.timestep % 1000 == 0:
+            record_states = self.states[-1:-1000:-1]
+
 
         return obs, reward, done, info
     
@@ -120,23 +130,29 @@ class TradingEnv(gym.Env):
             - long: present wealth v.s. average of last 200 step wealth, % * 0.35
             - origin: present wealth v.s. original wealth, % * 0.2
         '''
-        total_reward = 0
 
+        # action reward
+        is_valid = 1
         rl_agent = self.core.agent_manager.agents[agent_id]
+
+        action_reward = 0
         if action[0] == 0 or action[0] == 1:
             # VALID_ACTION = 1, INVALID_ACTION = 2, HOLD = 0
             if rl_agent.action_status == 1:
-                total_reward += 0.3
+                action_reward += 0.3
             elif rl_agent.action_status == 2:
-                total_reward -= 0.2
+                action_reward -= 0.2
+                is_valid = 0
+            
         elif action[0] == 2:
-            total_reward -= 0.02
+            action_reward -= 0.02
 
+        # wealth reward
         mid_steps = 50
         long_steps = 200
         wealth_weight = {'short': 0.15, 'mid': 0.35, 'long': 0.3, 'base': 0.2}
         present_wealth = self.states[-1]['agent']['wealth']
-        base_wealth = self.states[0]['agent']['wealth']
+        base_wealth = self.start_state['agent']['wealth']
         last_wealth = self.states[-2]['agent']['wealth'] if len(self.states) >= 2 else self.states[-1]['agent']['wealth']
         mid_wealth = sum([state['agent']['wealth'] for state in self.states[-1: -(mid_steps+1):-1]]) / len(self.states[-1: -(mid_steps+1):-1])
         long_wealth = sum([state['agent']['wealth'] for state in self.states[-1: -(long_steps+1):-1]]) / len(self.states[-1: -(long_steps+1):-1])
@@ -146,12 +162,13 @@ class TradingEnv(gym.Env):
         long_change = (present_wealth - long_wealth) / long_wealth
         base_change = (present_wealth - base_wealth) / base_wealth
 
-        total_reward += wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
+        wealth_reward = wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
 
-        return total_reward
+        return action_reward, wealth_reward, is_valid
 
     def get_obs(self):
         obs_config = self.config['Env']['obs']
+        timestep = self.core.timestep
 
         market_stats = self.core.get_env_state(obs_config['lookback'], obs_config['best_price'])
         bid_volumes = [bid['volume'] for bid in market_stats['bids']] + [0 for i in range(obs_config['best_price'] - len( market_stats['bids']))]
@@ -182,6 +199,7 @@ class TradingEnv(gym.Env):
                     'TSMC': self.core.agent_manager.agents[rl_agent_id].holdings['TSMC'],
                     'wealth': self.core.agent_manager.agents[rl_agent_id].wealth,}
         state = {
+            'timestep': timestep,
             'orderbook': orderbook,
             'price': price,
             'agent': rl_agent
@@ -190,8 +208,8 @@ class TradingEnv(gym.Env):
         return state
 
     def close(self):
-        print(f"The wealth of RLAgent is :{self.states[-1]['agent']['wealth']}, gaining {100 * (1 - self.states[-1]['agent']['wealth'] / self.states[0]['agent']['wealth'])}%")
-        return self.core.env_close()
+        orderbooks, agent_manager = self.core.env_close()
+        return orderbooks, agent_manager, self.states
 
     def seed(self):
         return
@@ -202,43 +220,4 @@ class TradingEnv(gym.Env):
             print(f"==========={self.core.timestep}===========\n")
 
 
-
-
-if __name__=='__main__':
-    config_path = Path("config_zi.json")
-    result_dir = Path("rl_result/zi_1000/")
-    model_dir = Path("model/")
-    if not result_dir.exists():
-        result_dir.mkdir(parents=True)
-    
-    random_seed = 9527
-    np.random.seed(random_seed)
-    random.seed(random_seed)
-    num_of_timesteps = 100
-    start_time = perf_counter()
-
-    config = json.loads(config_path.read_text())
-
-    env = TradingEnv(config)
-    # check_env(env, warn=True)
-
-    policy_kwargs = dict(
-        features_extractor_class=FeatureExtractor,
-    )
-
-    model = ppo.PPO(policy="MultiInputPolicy", env = env, verbose = 1, policy_kwargs = policy_kwargs)
-    model.learn(total_timesteps=10000)
-    model.save(model_dir / "timestep_10000")
-    obs = env.reset()
-    n_steps = 1000
-    for step in range(1000):
-        action, _ = model.predict(obs, deterministic=True)
-        obs, reward, done, info = env.step(action)
-    env.close()
-
-    # orderbooks, agent_manager = env.close()
-    # write_records(orderbooks, agent_manager, result_dir)
-    # with open(result_dir / 'config.json', 'w') as fp:
-    #     json.dump(config, fp)
-    # cost_time = str(timedelta(seconds = perf_counter() - start_time))
-    # print(f"Run {num_of_timesteps} in {cost_time}.")    
+        

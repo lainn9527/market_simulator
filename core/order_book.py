@@ -1,9 +1,10 @@
-from order import LimitOrder, MarketOrder
 from dataclasses import dataclass
 from collections import defaultdict
 from typing import Any, List, Tuple, Dict
-from message import Message
-from utils import OrderRecord, TransactionRecord
+
+from .order import LimitOrder, MarketOrder
+from .message import Message
+from .utils import OrderRecord, TransactionRecord
 
 
 class OrderBook:

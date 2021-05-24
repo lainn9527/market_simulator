@@ -1,8 +1,9 @@
 import random
-from order_book import OrderBook
-from message import Message
-from order import LimitOrder, MarketOrder
 from datetime import time, timedelta
+
+from .order_book import OrderBook
+from .message import Message
+from .order import LimitOrder, MarketOrder
 
 class Market:
     def __init__(self, core, interest_rate, interest_period, securities, clear_period):

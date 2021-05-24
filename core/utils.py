@@ -2,10 +2,12 @@ import json
 import numpy as np
 from pathlib import Path
 from dataclasses import dataclass
-from order import Order
 from typing import List, Dict
-from agent_manager import AgentManager
 from collections import defaultdict
+
+from .order import Order
+from .agent_manager import AgentManager
+
 @dataclass
 class TransactionRecord:
     time: int
@@ -33,14 +35,7 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
         file_path = output_dir / f"{code}.json"
         with open(file_path, 'w') as fp:
             json.dump(orderbook.steps_record, fp, indent=4)
-    
 
-    '''
-    group:
-      number
-      holdinds by step
-
-    '''
     agents_stats = {group_name: defaultdict(list) for group_name in agent_manager.group_agent.keys()}
     for record in agent_manager.step_records:
         for group_name, holdings in record.items():
@@ -58,13 +53,14 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
         agents_stats[group_name]['returns_by_agent'] = returns
         agents_stats[group_name]['returns_by_step'] = list(np.diff(np.log(agents_stats[group_name]['WEALTH'])))
 
-        
-        
-
-
     file_path = output_dir / "agent.json"
     with open(file_path, 'w') as fp:
         json.dump(agents_stats, fp, indent=4)
 
     
+    
+
+
+    
+
     

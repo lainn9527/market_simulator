@@ -1,11 +1,12 @@
-import agent
-from market import Market
 from datetime import datetime, timedelta
 from queue import Queue
-from order import LimitOrder, MarketOrder
 from typing import Dict, List
-from agent_manager import AgentManager
 from gym.utils import seeding
+
+from core import agent
+from .market import Market
+from .order import LimitOrder, MarketOrder
+from .agent_manager import AgentManager
 
 
 class Core:
@@ -70,9 +71,9 @@ class Core:
         self.handle_messages()
         self.market.step()
         self.timestep += 1
-        print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
-        if self.timestep % 100 == 0:
-            print(f"==========={self.timestep}===========\n")
+        # print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
+        # if self.timestep % 100 == 0:
+        #     print(f"==========={self.timestep}===========\n")
 
     def env_close(self):
         return self.market.orderbooks, self.agent_manager

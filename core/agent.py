@@ -1,11 +1,11 @@
 import math
 import numpy as np
 import talib
-from message import Message
-from order import LimitOrder, MarketOrder
 from datetime import datetime, timedelta, time
 from typing import Dict, List
 
+from .message import Message
+from .order import LimitOrder, MarketOrder
 
 class Agent:
     num_of_agent = 0
@@ -199,7 +199,7 @@ class RLAgent(Agent):
     def __init__(self, start_cash: int = 1000000, start_securities: Dict[str, int] = None, _id = None):
         super().__init__('rl', start_cash = start_cash, start_securities = start_securities, _id = _id)
         RLAgent.add_counter()
-        self.action_status = RLAgent.INVALID_ACTION
+        self.action_status = RLAgent.HOLD
     
     def step(self, action = None):
         super().step()

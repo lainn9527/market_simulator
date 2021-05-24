@@ -4,12 +4,11 @@ import random
 import json
 from time import perf_counter
 from datetime import timedelta
-from market import Market
-from agent import ZeroIntelligenceAgent
-from core import Core
-from utils import write_records
 from pathlib import Path
 from datetime import datetime
+
+from core.core import Core
+from core.utils import write_records
 # config = {
 #     "Market":{
 #         "Structure": {
@@ -46,7 +45,7 @@ from datetime import datetime
 #     }
 # }
 if __name__ == '__main__':
-    config_path = Path("config_zi.json")
+    config_path = Path("config/config_zi.json")
     result_dir = Path("result/zi_1000/")
     if not result_dir.exists():
         result_dir.mkdir()

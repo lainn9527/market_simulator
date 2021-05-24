@@ -1,8 +1,9 @@
-import agent
 import random
 from typing import Dict, List
 from collections import defaultdict
 from multiprocessing import Pool
+
+from core import agent
 
 class AgentManager:
     def __init__(self, core, config: Dict):
