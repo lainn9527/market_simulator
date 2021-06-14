@@ -3,7 +3,7 @@ from queue import Queue
 from typing import Dict, List
 from gym.utils import seeding
 
-from core import agent
+# from core import agent
 from .market import Market
 from .order import LimitOrder, MarketOrder
 from .agent_manager import AgentManager
@@ -34,6 +34,7 @@ class Core:
                              interest_rate=config['Market']['Structure']['interest_rate'],
                              interest_period=config['Market']['Structure']['interest_period'],
                              clear_period=config['Market']['Structure']['clear_period'],
+                             transaction_rate=config['Market']['Structure']['transaction_rate'],
                              securities=config['Market']['Securities'])
 
     def run(self, num_simulation=100, num_of_timesteps=100000, random_seed=9527):
@@ -80,8 +81,6 @@ class Core:
 
 
     def send_message(self, message):
-        # check valid (what valid)
-
         # add message to queue
         self.message_queue.put(message)
 
@@ -92,8 +91,16 @@ class Core:
         self.handle_message(message)
 
     def handle_messages(self):
+        market_messages = 0
+        agent_messages = 0
         while not self.message_queue.empty():
-            self.handle_message(self.message_queue.get())
+            message = self.message_queue.get()
+            self.handle_message(message)
+            if message.postcode == 'MARKET':
+                market_messages += 1
+            else:
+                agent_messages += 1
+        print(f'Market messages: {market_messages}, agent messages: {agent_messages}')
 
     def handle_message(self, message):
         if message.postcode == 'MARKET':
@@ -127,6 +134,9 @@ class Core:
     def get_tick_size(self, code):
         return self.market.get_tick_size(code)
 
+    def get_transaction_rate(self):
+        return self.market.get_transaction_rate()
+    
     def get_stock_size(self):
         return self.market.stock_size
 

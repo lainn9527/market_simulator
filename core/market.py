@@ -6,13 +6,14 @@ from .message import Message
 from .order import LimitOrder, MarketOrder
 
 class Market:
-    def __init__(self, core, interest_rate, interest_period, securities, clear_period):
+    def __init__(self, core, interest_rate, interest_period, securities, clear_period, transaction_rate):
         self.core = core
         self.is_trading = False
         self.stock_size = 100
         self.interest_rate = interest_rate
         self.interest_period = interest_period
         self.clear_period = clear_period
+        self.transaction_rate = transaction_rate
         self.orderbooks = {code: OrderBook(self, code, **value) for code, value in securities.items()}
     
     def start(self):
@@ -136,6 +137,9 @@ class Market:
     def get_tick_size(self, code):
         return self.orderbooks[code].tick_size
 
+    def get_transaction_rate(self):
+        return self.transaction_rate
+
     def get_securities(self):
         return list(self.orderbooks.keys())
 
@@ -150,10 +154,10 @@ class Market:
         for code, orderbook in self.orderbooks.items():
             volume = orderbook.steps_record['volume'][-1]
             amount = orderbook.steps_record['amount'][-1]
-            average_price = orderbook.steps_record['average'][-1]
+            close_price = orderbook.steps_record['close'][-1]
             bid = orderbook.bids_sum
             ask = orderbook.asks_sum
-            stats[code] = {'average price': average_price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
+            stats[code] = {'close price': close_price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
         return stats
 
     def determine_tick_size(self, base_price):
@@ -164,7 +168,7 @@ class Market:
         elif base_price < 100:
             return 0.1
         elif base_price < 500:
-            return 0.5
+            return 0.1
         elif base_price < 1000:
             return 1
         else:

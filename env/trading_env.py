@@ -83,7 +83,7 @@ class TradingEnv(gym.Env):
 
     def step(self, action):
         rl_agent_id = self.config['Env']['agent']['id']
-
+        action = action.tolist()
         self.core.env_step(action, rl_agent_id = rl_agent_id)
         self.states.append(self.get_obs())        
         obs = self.obs_wrapper(self.states[-1])
@@ -94,7 +94,7 @@ class TradingEnv(gym.Env):
 
         # record the action & reward in previous state (s_t-1 -> a_t, r_t)
         self.states[-2]['action'] = {'action': action, 'is_valid': is_valid}
-        self.states[-2]['reward'] = {'reward': reward, 'action': action_reward, 'wealth': wealth_reward}
+        self.states[-2]['reward'] = {'total_reward': reward, 'action_reward': action_reward, 'wealth_reward': wealth_reward}
 
         # print out the training info
         if self.train and self.core.timestep % 1000 == 0:

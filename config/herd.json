@@ -1,9 +1,9 @@
 {
     "Market":{
         "Structure": {
-            "interest_rate": 0,
+            "interest_rate": 0.01,
             "interest_period": 100,
-            "clear_period": 20,
+            "clear_period": 100,
             "transaction_rate": 0.002
         },
         "Securities": {
@@ -30,17 +30,18 @@
         "ZeroIntelligenceAgent": [
             {
                 "name": "zi_1000",
-                "number": 2000,
+                "number": 1000,
                 "bid_side": 0.5,
-                "range_of_price": 5,
-                "range_of_quantity": 5
+                "range_of_price": 10,
+                "range_of_quantity": 5,
+                "securities": {
+                    "TSMC": 10
+                }
             }
         ],
-
         "RandomAgent": [
             {
-                "name": "ra_1000",
-                "number": 1000,
+                "number": 0,
                 "range_of_time_window": 100, 
                 "k": 3.85,
                 "mean": 1.01
@@ -49,27 +50,59 @@
         
         "TrendAgent": [
             {
-                "name": "tr_100",
-                "number": 200,
+                "name": "tr_sma_100",
+                "number": 100,
                 "range_of_time_window": 100,
-                "strategy": {}
+                "strategy": "sma"
+            },
+            {
+                "name": "tr_ema_100",
+                "number": 100,
+                "range_of_time_window": 100,
+                "strategy": "ema"
+            },
+            {
+                "name": "tr_macd_100",
+                "number": 100,
+                "range_of_time_window": 100,
+                "strategy": "macd"
             }
         ],
         
         "MeanRevertAgent": [
             {
-                "name": "mr_100",
-                "number": 200,
-                "range_of_time_window": 100,
-                "strategy": {}
+                "name": "mr_sma_100",
+                "number": 100,
+                "range_of_time_window": 1000,
+                "strategy": "sma"
+            },
+            {
+                "name": "mr_ema_100",
+                "number": 100,
+                "range_of_time_window": 1000,
+                "strategy": "ema"
+            },
+            {
+                "name": "mr_macd_100",
+                "number": 100,
+                "range_of_time_window": 1000,
+                "strategy": "macd"
             }
+
         ],
         "FundamentalistAgent":[
             {
                 "name": "fu_100",
-                "number": 200
+                "number": 50
             }
 
+        ],
+        "DahooAgent": [
+            {
+                "name": "dh_1",
+                "number": 1,
+                "cash": 100000000
+            }
         ]
     },
 
@@ -79,7 +112,7 @@
             "id": "RL",
             "cash": 100000,
             "securities": {
-                "TSMC": 10
+                "TSMC": 1
             }
         },
         "obs": {

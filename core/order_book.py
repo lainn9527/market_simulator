@@ -1,3 +1,4 @@
+import numpy as np
 from dataclasses import dataclass
 from collections import defaultdict
 from typing import Any, List, Tuple, Dict
@@ -58,6 +59,7 @@ class OrderBook:
         self.asks_volume = defaultdict(int)
         self.asks_orders = defaultdict(list)
         self.asks_sum = 0
+        self.price_volume = defaultdict(int)
 
         self.num_of_order = 0
         self.num_of_cancelled_order = 0
@@ -72,13 +74,13 @@ class OrderBook:
 
         # initalize the valid price list
         tick_size = self.market.determine_tick_size(base_price)
-        self.bids_price.append(base_price)
-        self.asks_price.append(base_price)
+        # self.bids_price.append(base_price)
+        # self.asks_price.append(base_price)
         # point to the base price
         self.tick_size = tick_size
 
         record_list = ['open', 'high', 'low',
-                       'close', 'average', 'volume', 'amount', 'bid', 'ask']
+                       'close', 'average', 'volume', 'amount', 'bid', 'ask', 'price_volume', 'bid_five_price', 'ask_five_price']
         self.steps_record.update({key: [] for key in record_list})
         self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
 
@@ -107,6 +109,7 @@ class OrderBook:
                                             transactions=[],
                                             filled_quantity=0,
                                             filled_amount=0,
+                                            transaction_cost = 0,
                                             cancellation=False)
         self.current_orders.append(order_id)
         # send message to the orderer
@@ -167,6 +170,7 @@ class OrderBook:
                 transaction_quantity += matched_quantity
                 transaction_amount += matched_quantity * best_ask_price
                 remain_quantity -= matched_quantity
+                self.price_volume[best_ask_price] += matched_quantity
 
                 self.asks_volume[best_ask_price] -= matched_quantity
                 self.asks_sum -= matched_quantity
@@ -250,6 +254,7 @@ class OrderBook:
                 transaction_quantity += matched_quantity
                 transaction_amount += matched_quantity * best_bid_price
                 remain_quantity -= matched_quantity
+                self.price_volume[best_bid_price] += matched_quantity
 
                 self.bids_volume[best_bid_price] -= matched_quantity
                 self.bids_sum -= matched_quantity
@@ -337,11 +342,20 @@ class OrderBook:
         order_record.transactions.append(TransactionRecord(
             time=time, price=price, quantity=quantity))
         order_record.filled_quantity += quantity
-        order_record.filled_amount += price * quantity * self.market.stock_size
+        order_record.filled_amount += round(price * quantity * self.market.stock_size, 2)
+        order_record.transaction_cost += round(price * quantity * self.market.stock_size * self.market.transaction_rate, 2)
         # send message of transactions
+        if type(quantity) == np.int64:
+            print('a')
         self.market.send_message(
             Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {
-                    'code': order_record.order.code, 'order_id': order_id, 'bid_or_ask': order_record.order.bid_or_ask, 'price': price, 'quantity': quantity}),
+                        'code': order_record.order.code,
+                        'order_id': order_id,
+                        'bid_or_ask': order_record.order.bid_or_ask,
+                        'price': price,
+                        'quantity': quantity,
+                        'transaction_cost': order_record.transaction_cost
+                    }),
         )
         # check if this order is finished
         if order_record.filled_quantity == order_record.order.quantity:
@@ -359,7 +373,9 @@ class OrderBook:
         order_record = self.orders[order_id]
         order = order_record.order
         price, unfilled_quantity = order.price, order.quantity - order_record.filled_quantity
-        unfilled_amount = price * unfilled_quantity * self.market.stock_size
+        unfilled_amount = price * unfilled_quantity * self.market.stock_size * (1 + self.market.transaction_rate)
+        self.current_orders.remove(order_id)
+        self.orders[order_id].cancellation = True
 
         if order.bid_or_ask == 'BID':
             self.bids_orders[price].remove(order_id)
@@ -374,12 +390,13 @@ class OrderBook:
             if self.asks_volume[price] == 0:
                 self.asks_price.remove(price)
         
-        self.current_orders.remove(order_id)
-        self.orders[order_id].cancellation = True
         
         self.market.send_message(
             Message('AGENT', 'ORDER_CANCELLED', 'market', order_record.order.orderer,
-                    {'code': order_record.order.code, 'order_id': order_record.order.order_id, 'unfilled_amount': unfilled_amount, 'unfilled_quantity': unfilled_quantity})
+                    {'code': order_record.order.code,
+                     'order_id': order_record.order.order_id,
+                     'refund_cash': unfilled_amount,
+                     'refund_security': unfilled_quantity})
         )
         # self.num_of_cancelled_order += 1
 
@@ -407,7 +424,10 @@ class OrderBook:
         self.current_record['amount'] = round(self.current_record['amount'], 2)
         self.current_record['bid'] = self.bids_price[0] if len(self.bids_price) > 0 else self.current_record['close']
         self.current_record['ask'] = self.asks_price[0] if len(self.asks_price) > 0 else self.current_record['close']
-        
+        self.current_record['bid_five_price'] = {price: self.bids_volume[price] for price in self.bids_price[:5]}
+        self.current_record['ask_five_price'] = {price: self.asks_volume[price] for price in self.asks_price[:5]}
+        self.current_record['price_volume'] = {price: volume for price, volume in self.price_volume.items()}
+
         for key in self.steps_record.keys():
             self.steps_record[key].append(self.current_record[key])
 

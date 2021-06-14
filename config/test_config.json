@@ -2,7 +2,9 @@
     "Market":{
         "Structure": {
             "interest_rate": 0.01,
-            "interest_period": 100
+            "interest_period": 100,
+            "clear_period": 200,
+            "transaction_rate": 0.002
         },
         "Securities": {
             "TSMC": {
@@ -18,16 +20,21 @@
     "Agent": {
         "Global": {
             "cash": 100000,
+            "alpha": 2,
+            "risk_preference_mean": 0,
+            "risk_preference_var": 1,
             "securities": {
-                "TSMC": 100
+                "TSMC": 5
             }
         },
         "TestAgent": [
             {
+                "name": "bid_agent",
                 "number": 1,
                 "order_list": []
             },
             {
+                "name": "ask_agent",
                 "number": 1,
                 "order_list": []
             }

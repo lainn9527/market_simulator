@@ -45,8 +45,8 @@ from core.utils import write_records
 #     }
 # }
 if __name__ == '__main__':
-    config_path = Path("config/config_zi.json")
-    result_dir = Path("result/zi_1000/")
+    config_path = Path("config/herd.json")
+    result_dir = Path("result/test/")
     if not result_dir.exists():
         result_dir.mkdir()
     
@@ -54,7 +54,7 @@ if __name__ == '__main__':
     random_seed = 9527
     np.random.seed(random_seed)
     random.seed(random_seed)
-    num_of_timesteps = 10000
+    num_of_timesteps = 324
     start_time = perf_counter()
 
     config = json.loads(config_path.read_text())
