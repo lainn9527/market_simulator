@@ -345,8 +345,6 @@ class OrderBook:
         order_record.filled_amount += round(price * quantity * self.market.stock_size, 2)
         order_record.transaction_cost += round(price * quantity * self.market.stock_size * self.market.transaction_rate, 2)
         # send message of transactions
-        if type(quantity) == np.int64:
-            print('a')
         self.market.send_message(
             Message('AGENT', 'ORDER_FILLED', 'market', order_record.order.orderer, {
                         'code': order_record.order.code,
@@ -373,7 +371,7 @@ class OrderBook:
         order_record = self.orders[order_id]
         order = order_record.order
         price, unfilled_quantity = order.price, order.quantity - order_record.filled_quantity
-        unfilled_amount = price * unfilled_quantity * self.market.stock_size * (1 + self.market.transaction_rate)
+        unfilled_amount = round(price * unfilled_quantity * self.market.stock_size * (1 + self.market.transaction_rate), 2)
         self.current_orders.remove(order_id)
         self.orders[order_id].cancellation = True
 
@@ -400,8 +398,23 @@ class OrderBook:
         )
         # self.num_of_cancelled_order += 1
 
-    def modify_order(self):
-        pass
+    def modify_order(self, modification_order):
+        # cancel the original order and place new order
+        order_id = modification_order.order_id
+        filled_quantity = self.orders[order_id].filled_quantity
+        new_order = LimitOrder.from_modification_order(modification_order)
+        new_order.quantity -= filled_quantity
+        # refund by cancel function
+        self.cancel_order(order_id)
+        self.handle_limit_order(new_order)
+
+        self.market.send_message(
+            Message('AGENT', 'ORDER_MODIFIED', 'market', modification_order.orderer,
+                    {'code': new_order.order.code,
+                     'original_order_id': modification_order.order_id,
+                     'new_order_id': new_order.order_id,})
+        )
+
 
     def update_record(self, **name_val):
         # OHLCVA

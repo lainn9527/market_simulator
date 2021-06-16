@@ -83,11 +83,11 @@ class Market:
                 raise Exception
             self.orderbooks[message.content['order'].code].handle_market_order(message.content['order'])
         
-        elif message.subject == 'CANCEL_ORDER':
-            pass
+        elif message.subject == 'CANCELLATION_ORDER':
+            self.orderbooks[message.content['code']].cancel_order(message.content['order_id'])
         
-        elif message.subject == 'MODIFY_ORDER':
-            pass
+        elif message.subject == 'MODIFICATION_ORDER':
+            self.orderbooks[message.content['order'].code].modify_order(message.content['order'])
 
         else:
             raise Exception

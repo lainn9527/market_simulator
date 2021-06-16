@@ -81,7 +81,11 @@ class AgentManager:
         self.step_records.append(records)
 
     def build_agents(self):
-        # Pareto law
+        '''
+            The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
+            The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
+
+        '''
         original_cash = self.global_config['cash']
         original_holdings = self.global_config['securities']
         # control the decreasing level
@@ -98,10 +102,9 @@ class AgentManager:
                 
                 agent_cash = [ max(int(original_cash * config['number'] * pow(rank+1, -(1/alpha))), 10000) for rank in range(config['number'])]
                 agent_holdings = [{code: max(int(num * config['number'] * pow(rank+1, -(1/alpha))), 1) for code, num in original_holdings.items()} for rank in range(config['number'])] 
-                # agent_average_price = [random.gauss(mu = 100, sigma = 10) for _ in range(config['number'])]
-                
+                agent_average_cost = [random.gauss(mu = 100, sigma = 10) for _ in range(config['number'])]
                 risk_preferences = [random.gauss(mu = self.global_config['risk_preference_mean'], sigma = self.global_config['risk_preference_var']) for i in range(config['number'])]
-                # scale to 0~1
+
                 if config['number'] > 1:
                     min_risk, max_risk = min(risk_preferences), max(risk_preferences)
                     risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
@@ -113,7 +116,7 @@ class AgentManager:
                 for i in range(config['number']):
                     self.group_counter[group_name] += 1
                     config['_id'] = f"{group_name}_{self.group_counter[group_name]}"
-                    config['cash'], config['securities'], config['risk_preference'] = agent_cash[i], agent_holdings[i], risk_preferences[i]
+                    config['cash'], config['securities'], config['risk_preference'], config['average_cost'] = agent_cash[i], agent_holdings[i], risk_preferences[i], agent_average_cost[i]
                     agent = eval(f"self.build_{short_type}_agent(config)")
                     agent.start(self.core)
                     self.agents[agent.unique_id] = agent

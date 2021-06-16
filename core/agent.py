@@ -7,12 +7,12 @@ from datetime import datetime, timedelta, time
 from typing import Dict, List
 
 from .message import Message
-from .order import LimitOrder, MarketOrder
+from .order import LimitOrder, MarketOrder, ModificationOrder
 
 class Agent:
     num_of_agent = 0
 
-    def __init__(self, _id, _type, start_cash = 10000000, start_securities = None, risk_preference = 1):
+    def __init__(self, _id, _type, start_cash = 10000000, start_securities = None, average_cost = 100, risk_preference = 1):
         Agent.add_counter()
         self.type = _type
         self.unique_id = _id
@@ -26,18 +26,19 @@ class Agent:
         '''
         self.cash = start_cash
         self.holdings = {code: num for code, num in start_securities.items()}
+        self.average_cost = average_cost
+        self.risk_preference = risk_preference
+
         self.reserved_cash = 0
         self.reserved_holdings = {code: 0 for code in self.holdings.keys()}
         self.wealth = 0
         self.orders = {code: [] for code in self.holdings.keys()}
         self.orders_history = {code: [] for code in self.holdings.keys()}
         self.initial_wealth = 0
-        self.average_cost = 0
         self.bids_volume = 0
         self.asks_volume = 0
 
         # state flag
-        self.risk_preference = risk_preference
         
     
     def start(self, core):
@@ -97,11 +98,12 @@ class Agent:
         price = round(tick_size * ((price+1e-6) // tick_size), 2)
         transaction_rate = self.core.get_transaction_rate()
         cost = round(quantity * price * stock_size * (1 + transaction_rate), 2)
+
+        # Check if there are ask orders and if so, hedge them.
+        quantity = self.check_bid_hedge(code, price, quantity)           
         if price <= 0 or quantity == 0 or cost > self.cash:
             return
-        if price > 500:
-            self.for_break()
-
+                
         self.cash -= cost
         self.reserved_cash += cost
         self.bids_volume += quantity
@@ -115,6 +117,8 @@ class Agent:
         tick_size = self.core.get_tick_size(code)
         price = round(tick_size * ((price+1e-6) // tick_size), 2)
 
+        # Check if there are bid orders and if so, hedge them.
+        quantity = self.check_ask_hedge(code, price, quantity)
         if quantity == 0 or price <= 0:
             return
         if quantity > self.holdings[code]:
@@ -130,19 +134,94 @@ class Agent:
         
         self.core.send_message(msg)
 
-
-
     def place_market_bid_order(self, code, quantity):
         pass
 
     def place_market_ask_order(self, code, quantity):
         pass
     
-    def modify_order(self):
-        pass
+    def cancel_order(self, code, order_id):
+        msg = Message('MARKET', 'CANCELLATION_ORDER', self.unique_id, 'market', {'code': code, 'order_id': order_id})
+        self.core.send_message(msg)
 
-    def cancel_order(self):
-        pass
+    def modify_order(self, code, order_id, price, volume):
+        order_record = self.core.get_order_record(code, order_id)
+        original_price = order_record.order.price
+        original_quantity = order_record.order.quantity
+        filled_quantity = order_record.filled_quantity
+        if volume <= filled_quantity:
+            # the modified volume <= filled volume which is error
+            raise Exception
+        
+        if order_record.order.bid_or_ask == 'BID':
+            # check validility
+            tick_size = self.core.get_tick_size(code)
+            stock_size = self.core.get_stock_size()
+            price = round(tick_size * ((price+1e-6) // tick_size), 2)
+            transaction_rate = self.core.get_transaction_rate()
+            reserved_cost = round((original_quantity - filled_quantity) * original_price * stock_size * (1 + transaction_rate), 2) 
+            cost = round((volume - filled_quantity) * price * stock_size * (1 + transaction_rate), 2)
+            supply_cost = round(cost - reserved_cost, 2)
+            if supply_cost > self.cash:
+                # this modification is not available
+                return
+            elif supply_cost > 0:
+                # deduct here, refund in message
+                self.cash -= supply_cost
+                self.reserved_cash += supply_cost
+            self.bids_volume += volume - original_quantity
+            
+        elif order_record.order.bid_or_ask == 'ASK':
+            supply_quantity = volume - original_quantity
+            if supply_quantity > self.holdings[code]:
+                # this modification is not available
+                return
+            elif supply_quantity > 0:
+                # deduct here, refund in message
+                self.holdings[code] -= supply_quantity
+                self.reserved_holdings[code] += supply_quantity
+            
+            self.asks_volume += volume - original_quantity
+
+        modification_order = ModificationOrder.from_limit_order(limit_order = order_record.order, price = price, quantity = volume, order_id = order_id)
+        msg = Message('MARKET', 'MODIFICATION_ORDER', self.unique_id, 'market', {'order': modification_order})
+        self.core.send_message(msg)
+    
+    def check_bid_hedge(self, code, price, quantity):
+        for order in self.orders:
+            order_record = self.core.get_order_record(code, order)
+            if order_record.order.bid_or_ask == 'ASK' and price >= order_record.order.price:
+                unfilled_quantity = order_record.order.quantity - order_record.filled_quantity
+                if quantity > unfilled_quantity:
+                    # cancel order and reduce the quantity
+                    self.cancel_order(code, order_record.order.order_id)
+                    quantity -= unfilled_quantity
+
+                elif quantity <= unfilled_quantity:
+                    # modify order
+                    self.modify_order(code, order_record.order.order_id, price, order_record.order.quantity - quantity)
+                    quantity = 0
+                    break
+        return quantity
+
+
+    def check_ask_hedge(self, code, price, quantity):
+        for order in self.orders:
+            order_record = self.core.get_order_record(code, order)
+            if order_record.order.bid_or_ask == 'BID' and price <= order_record.order.price:
+                unfilled_quantity = order_record.order.quantity - order_record.filled_quantity
+                if quantity > unfilled_quantity:
+                    # cancel order and reduce the quantity
+                    self.cancel_order(code, order_record.order.order_id)
+                    quantity -= unfilled_quantity
+
+                elif quantity <= unfilled_quantity:
+                    # modify order
+                    self.modify_order(code, order_record.order.order_id, price, order_record.order.quantity - quantity)
+                    quantity = 0
+                    break
+        
+        return quantity
 
     def handle_filled_order(self, code, order_id, price, quantity, transaction_cost):
         stock_size = self.core.get_stock_size()
@@ -256,8 +335,8 @@ class RLAgent(Agent):
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id, start_cash = 1000000, start_securities = None, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
-        super().__init__(_id, 'zi', start_cash, start_securities)
+    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+        super().__init__(_id, 'zi', start_cash, start_securities, average_cost)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -334,8 +413,8 @@ class ZeroIntelligenceAgent(Agent):
 
 class RandomAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash = 1000000, start_securities = None, time_window = 50, k = 3.85, mean = 1.01):
-        super().__init__(_id, 'ra', start_cash, start_securities)
+    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, time_window = 50, k = 3.85, mean = 1.01):
+        super().__init__(_id, 'ra', start_cash, start_securities, average_cost)
         RandomAgent.add_counter()
         self.mean = mean
         self.time_window = time_window
@@ -383,8 +462,8 @@ class RandomAgent(Agent):
 
 class TrendAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id, 'tr', start_cash, start_securities,risk_preference)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
+        super().__init__(_id, 'tr', start_cash, start_securities, risk_preference, average_cost)
         TrendAgent.add_counter()
         self.strategy = strategy
         self.time_window = time_window
@@ -456,8 +535,8 @@ class TrendAgent(Agent):
 
 class MeanRevertAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id, 'mr', start_cash, start_securities,risk_preference)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
+        super().__init__(_id, 'mr', start_cash, start_securities, risk_preference, average_cost)
         MeanRevertAgent.add_counter()
         self.strategy = strategy
         self.time_window = time_window
@@ -531,8 +610,8 @@ class MeanRevertAgent(Agent):
 
 class MomentumAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, time_window = 100):
-        super().__init__(_id, 'mt', start_cash, start_securities)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, time_window = 100):
+        super().__init__(_id, 'mt', start_cash, start_securities, average_cost)
         MomentumAgent.add_counter()
         self.time_window = time_window
         self.local_minimum = None
@@ -565,8 +644,8 @@ class MomentumAgent(Agent):
     
 class FundamentalistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, securities_value = None):
-        super().__init__(_id, 'mr', start_cash, start_securities)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, securities_value = None):
+        super().__init__(_id, 'mr', start_cash, start_securities, average_cost)
         FundamentalistAgent.add_counter()
         self.securities_value = securities_value
     
@@ -599,8 +678,8 @@ class FundamentalistAgent(Agent):
 
 class DahooAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, securities_value = None):
-        super().__init__(_id, 'mr', start_cash, start_securities)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, securities_value = None):
+        super().__init__(_id, 'mr', start_cash, start_securities, average_cost)
         DahooAgent.add_counter()
         self.securities_value = securities_value
         self.status = 'HOLD'
@@ -734,8 +813,8 @@ class DahooAgent(Agent):
 
 class BrokerAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, code, start_cash = 200000000, target_volume = 500):
-        super().__init__(_id, 'BROKER', start_cash)
+    def __init__(self, _id, code, start_cash = 200000000, average_cost = 100, target_volume = 500):
+        super().__init__(_id, 'BROKER', start_cash, average_cost)
         BrokerAgent.add_counter()
 
         # responsible for creating the liquidity of certain security
@@ -772,8 +851,8 @@ class BrokerAgent(Agent):
 class TestAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id, order_list, start_cash = 1000000, start_securities = None):
-        super().__init__(_id, 'te', start_cash, start_securities)
+    def __init__(self, _id, order_list, start_cash = 1000000, start_securities = None, average_cost = 100):
+        super().__init__(_id, 'te', start_cash, start_securities, average_cost)
         TestAgent.add_counter()
         self.order_list = order_list
 
