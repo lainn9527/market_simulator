@@ -125,8 +125,11 @@ class Market:
     def get_current_price(self, code):
         return self.orderbooks[code].current_record['price']
     
-    def get_records(self, code, _type, step = 1):
-        return self.orderbooks[code].steps_record[_type][:-1*(step+1):-1]
+    def get_records(self, code, _type, step = 1, from_last = True):
+        if from_last:
+            return self.orderbooks[code].steps_record[_type][:-1*(step+1):-1]
+        else:
+            return self.orderbooks[code].steps_record[_type][-1*step::]
 
     def get_best_bids(self, code, number = 1):
         return [{'price': price, 'volume': self.orderbooks[code].bids_volume[price]} for price in self.orderbooks[code].bids_price[:number]]

@@ -2,12 +2,13 @@ import random
 from typing import Dict, List
 from collections import defaultdict
 from core import agent
-
+from queue import Queue
 class AgentManager:
     def __init__(self, core, config: Dict):
         self.config = config
         self.global_config = {}
         self.agents = {}
+        self.agent_queue = Queue()
         self.group_agent = {}
         self.group_counter = {}
         self.group_stats = {}
@@ -24,12 +25,23 @@ class AgentManager:
         self.build_agents()
 
 
+    # def step(self):
+    #     agent_ids = list(self.agents.keys())
+    #     random.shuffle(agent_ids)
+    #     for agent_id in agent_ids:
+    #         self.agents[agent_id].step()
+    #     self.update_record()
+
     def step(self):
-        agent_ids = list(self.agents.keys())
-        random.shuffle(agent_ids)
-        for agent_id in agent_ids:
+        if self.agent_queue.empty():
+            agent_ids = list(self.agents.keys())
+            random.shuffle(agent_ids)
+            for agent_id in agent_ids:
+                self.agent_queue.put(agent_id)
+        while not self.core.queue_full() and not self.agent_queue.empty():
+            agent_id = self.agent_queue.get()
             self.agents[agent_id].step()
-        self.update_record()
+        self.update_record() 
 
     def env_step(self, action, rl_agent_id):
         agent_ids = list(self.agents.keys())
@@ -81,10 +93,8 @@ class AgentManager:
             for config in groups:
                 if config['number'] == 0:
                     continue
-                if 'cash' in config.keys():
-                    original_cash = config['cash']
-                if 'securities' in config.keys():
-                    original_holdings = config['securities']
+                original_cash = config['cash'] if 'cash' in config.keys() else self.global_config['cash']
+                original_holdings = config['securities'] if 'securities' in config.keys() else self.global_config['securities']
                 
                 agent_cash = [ max(int(original_cash * config['number'] * pow(rank+1, -(1/alpha))), 10000) for rank in range(config['number'])]
                 agent_holdings = [{code: max(int(num * config['number'] * pow(rank+1, -(1/alpha))), 1) for code, num in original_holdings.items()} for rank in range(config['number'])] 
@@ -97,7 +107,7 @@ class AgentManager:
                     risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
                     
                 short_type = self.type_abbreviation(_type)
-                group_name = f"{short_type}_{group_conuter}" if 'name' not in config.keys() else config['name']
+                group_name = f"{config['name']}_{config['number']}"
                 self.group_agent[group_name] = []
                 self.group_counter[group_name] = 0
                 for i in range(config['number']):

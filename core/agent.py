@@ -43,8 +43,9 @@ class Agent:
     def start(self, core):
         self.core = core
         self.initial_wealth = self.cash + sum([self.core.get_value(code) * num * self.core.get_stock_size() for code, num in self.holdings.items()])
-        self.average_cost = self.core.get_value('TSMC')
-        # self.average_cost = round(random.gauss(mu = self.core.get_value('TSMC'), sigma = 10), 1)
+        # self.average_cost = self.core.get_value('TSMC')
+        self.wealth = self.initial_wealth
+        self.average_cost = round(random.gauss(mu = self.core.get_value('TSMC'), sigma = 10), 1)
 
     def step(self):
         self.update_wealth()
@@ -80,7 +81,7 @@ class Agent:
         elif message.subject == 'ISSUE_INTEREST':
             interest_rate = message.content['interest_rate']
             self.cash += round(self.cash * interest_rate, 2)
-            
+
         elif message_subject == 'ISSUE_DIVIDEND':
             dividend = self.core.get_stock_size() * message.content['dividend']
             self.cash += dividend
@@ -399,16 +400,14 @@ class TrendAgent(Agent):
         stock_size = self.core.get_stock_size()
         tick_size = self.core.get_tick_size(code)
         current_price = self.core.get_current_price(code)
-        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window)
+        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
 
         if len(price_list) < self.time_window:
             return
         
         risk_free_amount = (1-self.risk_preference) * self.wealth
         signal = self.get_signal(price_list)
-        if current_price > 104:
-            current_price
-        # add hard limit to sell
+        # # add hard limit to sell
         if self.holdings[code] > 0:
             profit_ratio = (current_price / self.average_cost)
             # realize
@@ -474,7 +473,7 @@ class MeanRevertAgent(Agent):
         stock_size = self.core.get_stock_size()
         tick_size = self.core.get_tick_size(code)
         current_price = self.core.get_current_price(code)
-        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window)
+        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
 
         if len(price_list) < self.time_window:
             return
@@ -614,7 +613,7 @@ class DahooAgent(Agent):
             self.cool_down -= 1
             return
 
-        if self.status == 'HOLD' and (self.get_time() == 100 or (self.get_time()+1) % 1000 == 0):
+        if self.status == 'HOLD' and (self.get_time() > 100 or (self.get_time()+1) % 1000 == 0):
             self.plan()
             self.status = 'COLLECT'
         elif self.status == 'SUPRESS':
@@ -636,7 +635,7 @@ class DahooAgent(Agent):
         start_wealth = self.wealth
         value = self.core.get_value('TSMC')
         supress_price = value * 0.95
-        collect_price = value * 0.95
+        collect_price = value * 0.99
         raise_price = value * 1.05
         dump_price = value * 0.85
         strategy = {
@@ -670,6 +669,7 @@ class DahooAgent(Agent):
         if 'collect_number' not in self.strategy_record[-1].keys():
             collect_propotion = self.strategy_record[-1]['start_wealth'] * 0.6
             self.strategy_record[-1]['collect_number'] = collect_propotion // (stock_size*collect_price)
+            self.strategy_record[-1]['placed'] = collect_propotion // (stock_size*collect_price)
 
         if current_price < collect_price:
             tick_size = self.core.get_tick_size(code)
@@ -680,6 +680,7 @@ class DahooAgent(Agent):
             if self.strategy_record[-1]['collect_number'] < 0:
                 self.strategy_record[-1].pop('collect_number')
                 self.status = 'RAISE'
+                self.cool_down = 200
     
     def raise_price(self):
         # hold large number of stocks and try to snatch the chives
@@ -699,12 +700,13 @@ class DahooAgent(Agent):
         quantity = self.strategy_record[-1]['raise_number']
         self.place_limit_bid_order(code, quantity, price)
         self.strategy_record[-1]['raise_times'] -= 1
-        self.cool_down = 10
+        self.cool_down = 0
         if self.strategy_record[-1]['raise_times'] == 0:
             self.status = 'DUMP'
             self.strategy_record[-1].pop('raise_number')
             self.strategy_record[-1].pop('raise_times')
             self.strategy_record[-1].pop('raise_tick')
+            self.cool_down = 200
     
     def dump_security(self):
         # hold large number of stocks and try to snatch the chives
@@ -714,13 +716,13 @@ class DahooAgent(Agent):
         tick_size = self.core.get_tick_size(code)
         dump_price = self.strategy_record[-1]['dump_price']
         if 'dump_number' not in self.strategy_record[-1].keys():
-            self.strategy_record[-1]['dump_times'] = 3
+            self.strategy_record[-1]['dump_times'] = 10
             self.strategy_record[-1]['dump_number'] = self.holdings[code] // self.strategy_record[-1]['dump_times']
             self.strategy_record[-1]['dump_tick'] = ((dump_price - current_price) // tick_size) // self.strategy_record[-1]['dump_times']
 
         price = current_price + self.strategy_record[-1]['dump_tick'] * tick_size
         quantity = self.strategy_record[-1]['dump_number']
-        self.place_limit_bid_order(code, quantity, price)
+        self.place_limit_ask_order(code, quantity, price)
         self.strategy_record[-1]['dump_times'] -= 1
         self.cool_down = 10
         if self.strategy_record[-1]['dump_times'] == 0:

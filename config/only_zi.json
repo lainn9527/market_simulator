@@ -1,0 +1,71 @@
+{
+    "Core": {
+        "result_name": "zi",
+        "timestep": 16200
+    },
+    "Market":{
+        "Structure": {
+            "interest_rate": 0.01,
+            "interest_period": 400,
+            "clear_period": 200,
+            "transaction_rate": 0.002,
+            "order_capacity": 50
+        },
+        "Securities": {
+            "TSMC": {
+                "value": 100,
+                "dividend_ratio": 0.1,
+                "dividend_ar": 0.95,
+                "dividend_var": 0.0743,
+                "dividend_period": 100
+            }
+        }
+    },
+
+    "Agent": {
+        "Global": {
+            "cash": 10000,
+            "alpha": 2,
+            "risk_preference_mean": 0,
+            "risk_preference_var": 1,
+            "securities": {
+                "TSMC": 0
+            }
+        },
+        "ZeroIntelligenceAgent": [
+            {
+                "name": "zi",
+                "number": 500,
+                "bid_side": 0.5,
+                "range_of_price": 10,
+                "range_of_quantity": 5,
+                "cash": 10000,
+                "securities": {
+                    "TSMC": 1
+                }
+            }
+        ],
+        "DahooAgent": [
+            {
+                "name": "dh",
+                "number": 0,
+                "cash": 100000000
+            }
+        ]
+    },
+
+    "Env":{
+        "agent": {
+            "name": "rl_1",
+            "id": "RL",
+            "cash": 100000,
+            "securities": {
+                "TSMC": 1
+            }
+        },
+        "obs": {
+            "lookback": 10,
+            "best_price": 5
+        }
+    }
+}

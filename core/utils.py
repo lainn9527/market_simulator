@@ -69,7 +69,7 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
         agents_stats[group_name]['initial_cash_by_agent'] = agent_manager.initial_state[group_name]['cash']
         agents_stats[group_name]['initial_security_by_agent'] = agent_manager.initial_state[group_name]['security']
         agents_stats[group_name]['returns_by_agent'] = returns
-        agents_stats[group_name]['returns_by_step'] = list(np.diff(np.log(agents_stats[group_name]['WEALTH'])))
+        # agents_stats[group_name]['returns_by_step'] = list(np.diff(np.log(agents_stats[group_name]['WEALTH'])))
         agents_stats[group_name]['timestep_bid'] = timestep_bid
         agents_stats[group_name]['timestep_ask'] = timestep_ask
 

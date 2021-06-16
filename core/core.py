@@ -29,6 +29,8 @@ class Core:
         self.start_time = None
         self.timestep = None
         self.random_seed = None
+        self.show_price = config['Core']['show_price']
+        self.order_capacity = config['Market']['Structure']['order_capacity']
         self.agent_manager = AgentManager(self, config['Agent'])
         self.market = Market(self,
                              interest_rate=config['Market']['Structure']['interest_rate'],
@@ -62,10 +64,11 @@ class Core:
         self.market.step()
         self.timestep += 1
 
-        print(
-            f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
-        if self.timestep % 100 == 0:
-            print(f"==========={self.timestep}===========\n")
+        if self.show_price:
+            print(
+                f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
+            if self.timestep % 100 == 0:
+                print(f"==========={self.timestep}===========\n")
 
     def env_step(self, action, rl_agent_id):
         self.agent_manager.env_step(action, rl_agent_id)
@@ -100,7 +103,7 @@ class Core:
                 market_messages += 1
             else:
                 agent_messages += 1
-        print(f'Market messages: {market_messages}, agent messages: {agent_messages}')
+        # print(f'Market messages: {market_messages}, agent messages: {agent_messages}')
 
     def handle_message(self, message):
         if message.postcode == 'MARKET':
@@ -116,14 +119,17 @@ class Core:
             raise Exception
         # print(message)
 
+    def queue_full(self):
+        return self.message_queue.qsize() > self.order_capacity
+
     def get_order_record(self, code, order_id):
         return self.market.get_order_record(code, order_id)
 
     def get_current_price(self, code):
         return self.market.get_current_price(code)
 
-    def get_records(self, code, _type, step=1):
-        return self.market.get_records(code, _type, step)
+    def get_records(self, code, _type, step=1, from_last = True):
+        return self.market.get_records(code, _type, step, from_last)
 
     def get_best_bids(self, code, number):
         return self.market.get_best_bids(code, number)
