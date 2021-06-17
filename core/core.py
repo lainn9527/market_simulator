@@ -117,7 +117,6 @@ class Core:
             self.agent_manager.receive_message(message)
         else:
             raise Exception
-        # print(message)
 
     def queue_full(self):
         return self.message_queue.qsize() > self.order_capacity

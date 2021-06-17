@@ -34,6 +34,8 @@ class Agent:
         self.wealth = 0
         self.orders = {code: [] for code in self.holdings.keys()}
         self.orders_history = {code: [] for code in self.holdings.keys()}
+        self.cancelled_orders = {code: [] for code in self.holdings.keys()}
+        self.modified_orders = {code: [] for code in self.holdings.keys()}
         self.initial_wealth = 0
         self.bids_volume = 0
         self.asks_volume = 0
@@ -78,6 +80,11 @@ class Agent:
         elif message.subject == 'ORDER_CANCELLED':
             self.handle_cancelled_order(code = message.content['code'], order_id = message.content['order_id'], refund_cash = message.content['refund_cash'], refund_security = message.content['refund_security'])
 
+        elif message.subject == 'ORDER_CANCEL_FAILED':
+            # remove from the cancelled list
+            if message.content['order_id'] in self.cancelled_orders[message.content['code']]:
+                self.cancelled_orders[message.content['code']].remove(message.content['order_id'])
+
 
         elif message.subject == 'ISSUE_INTEREST':
             interest_rate = message.content['interest_rate']
@@ -86,6 +93,12 @@ class Agent:
         elif message_subject == 'ISSUE_DIVIDEND':
             dividend = self.core.get_stock_size() * message.content['dividend']
             self.cash += dividend
+
+        elif message.subject == 'ORDER_MODIFIED':
+            pass
+            # if message.content['original_order_id'] in self.orders[message.content['code']] or message.content['new_order_id'] not in self.orders[message.content['code']]:
+            #     raise Exception
+            # self.orders[message.content['code']].append(message.content['new_order_id'])
 
         elif message.subject == 'ORDER_INVALIDED':
             pass
@@ -100,7 +113,8 @@ class Agent:
         cost = round(quantity * price * stock_size * (1 + transaction_rate), 2)
 
         # Check if there are ask orders and if so, hedge them.
-        quantity = self.check_bid_hedge(code, price, quantity)           
+        self.check_bid_hedge(code, price, quantity)
+
         if price <= 0 or quantity == 0 or cost > self.cash:
             return
                 
@@ -118,7 +132,9 @@ class Agent:
         price = round(tick_size * ((price+1e-6) // tick_size), 2)
 
         # Check if there are bid orders and if so, hedge them.
-        quantity = self.check_ask_hedge(code, price, quantity)
+        self.check_ask_hedge(code, price, quantity)
+
+        
         if quantity == 0 or price <= 0:
             return
         if quantity > self.holdings[code]:
@@ -141,6 +157,7 @@ class Agent:
         pass
     
     def cancel_order(self, code, order_id):
+        self.cancelled_orders[code].append(order_id)
         msg = Message('MARKET', 'CANCELLATION_ORDER', self.unique_id, 'market', {'code': code, 'order_id': order_id})
         self.core.send_message(msg)
 
@@ -170,7 +187,7 @@ class Agent:
                 self.cash -= supply_cost
                 self.reserved_cash += supply_cost
             self.bids_volume += volume - original_quantity
-            
+
         elif order_record.order.bid_or_ask == 'ASK':
             supply_quantity = volume - original_quantity
             if supply_quantity > self.holdings[code]:
@@ -188,48 +205,32 @@ class Agent:
         self.core.send_message(msg)
     
     def check_bid_hedge(self, code, price, quantity):
-        for order in self.orders:
+        for order in self.orders[code]:
+            if order in self.cancelled_orders:
+                continue
             order_record = self.core.get_order_record(code, order)
             if order_record.order.bid_or_ask == 'ASK' and price >= order_record.order.price:
-                unfilled_quantity = order_record.order.quantity - order_record.filled_quantity
-                if quantity > unfilled_quantity:
-                    # cancel order and reduce the quantity
-                    self.cancel_order(code, order_record.order.order_id)
-                    quantity -= unfilled_quantity
-
-                elif quantity <= unfilled_quantity:
-                    # modify order
-                    self.modify_order(code, order_record.order.order_id, price, order_record.order.quantity - quantity)
-                    quantity = 0
-                    break
-        return quantity
+                # cancel all paradoxical order
+                self.cancel_order(code, order_record.order.order_id)
 
 
     def check_ask_hedge(self, code, price, quantity):
-        for order in self.orders:
+        for order in self.orders[code]:
+            if order in self.cancelled_orders:
+                continue
             order_record = self.core.get_order_record(code, order)
             if order_record.order.bid_or_ask == 'BID' and price <= order_record.order.price:
-                unfilled_quantity = order_record.order.quantity - order_record.filled_quantity
-                if quantity > unfilled_quantity:
-                    # cancel order and reduce the quantity
-                    self.cancel_order(code, order_record.order.order_id)
-                    quantity -= unfilled_quantity
-
-                elif quantity <= unfilled_quantity:
-                    # modify order
-                    self.modify_order(code, order_record.order.order_id, price, order_record.order.quantity - quantity)
-                    quantity = 0
-                    break
-        
-        return quantity
+                # cancel all paradoxical order
+                self.cancel_order(code, order_record.order.order_id)
 
     def handle_filled_order(self, code, order_id, price, quantity, transaction_cost):
         stock_size = self.core.get_stock_size()
         order_record = self.core.get_order_record(code, order_id)
+        transaction_rate = self.core.get_transaction_rate()
         if order_record.order.bid_or_ask == 'BID':
             self.average_cost = round( (stock_size*(self.average_cost * self.holdings[code] + price * quantity) + transaction_cost) / (stock_size*(self.holdings[code] + quantity)), 2)
             self.holdings[code] += quantity
-            self.cash += (order_record.order.price - price) * quantity * stock_size
+            self.cash += (order_record.order.price - price) * quantity * stock_size * (1 + transaction_rate)
             self.reserved_cash -= (order_record.order.price * quantity * stock_size + transaction_cost) 
         
         elif order_record.order.bid_or_ask == 'ASK':
@@ -252,7 +253,9 @@ class Agent:
         elif order_record.order.bid_or_ask == 'ASK':
             self.holdings[code] += refund_security
             self.reserved_holdings[code] -= refund_security
-            
+        
+        if order_id in self.cancelled_orders:
+            self.cancelled_orders.remove(order_id)
         self.orders[code].remove(order_id)
         self.orders_history[code].append(order_id)
 
@@ -274,9 +277,7 @@ class Agent:
     def handle_open(self):
         return
 
-    def for_break(self):
-        pass
-
+    
     @classmethod
     def add_counter(cls):
         cls.num_of_agent += 1

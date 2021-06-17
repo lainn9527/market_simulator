@@ -1,10 +1,16 @@
 {
+    "Core": {
+        "result_name": "test",
+        "timestep": 10,
+        "show_price": true
+    },
     "Market":{
         "Structure": {
             "interest_rate": 0.01,
             "interest_period": 100,
             "clear_period": 200,
-            "transaction_rate": 0.002
+            "transaction_rate": 0.002,
+            "order_capacity": 50
         },
         "Securities": {
             "TSMC": {

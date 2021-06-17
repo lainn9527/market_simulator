@@ -370,6 +370,18 @@ class OrderBook:
     def cancel_order(self, order_id):
         order_record = self.orders[order_id]
         order = order_record.order
+        if order_record.finished_time is not None:
+            # the order is finished before and we can't cancel it
+            self.market.send_message(
+                Message('AGENT', 'ORDER_CANCEL_FAILED', 'market', order_record.order.orderer,
+                        {'code': order_record.order.code,
+                        'order_id': order_record.order.order_id,})
+            )
+            return
+        elif order_record.cancellation == True:
+            # double cancelled
+            raise Exception
+
         price, unfilled_quantity = order.price, order.quantity - order_record.filled_quantity
         unfilled_amount = round(price * unfilled_quantity * self.market.stock_size * (1 + self.market.transaction_rate), 2)
         self.current_orders.remove(order_id)
@@ -399,18 +411,20 @@ class OrderBook:
         # self.num_of_cancelled_order += 1
 
     def modify_order(self, modification_order):
-        # cancel the original order and place new order
         order_id = modification_order.order_id
-        filled_quantity = self.orders[order_id].filled_quantity
+        order_record = self.orders[order_id]
+        filled_quantity = order_record.filled_quantity
         new_order = LimitOrder.from_modification_order(modification_order)
         new_order.quantity -= filled_quantity
-        # refund by cancel function
+        # calculate the refund
+        original_cost = order_record.order.price * (order_record.order.quantity - filled_quantity)
+
         self.cancel_order(order_id)
         self.handle_limit_order(new_order)
 
         self.market.send_message(
             Message('AGENT', 'ORDER_MODIFIED', 'market', modification_order.orderer,
-                    {'code': new_order.order.code,
+                    {'code': new_order.code,
                      'original_order_id': modification_order.order_id,
                      'new_order_id': new_order.order_id,})
         )
