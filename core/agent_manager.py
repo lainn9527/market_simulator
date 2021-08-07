@@ -84,8 +84,8 @@ class AgentManager:
         '''
             The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
             The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
-
         '''
+        
         original_cash = self.global_config['cash']
         original_holdings = self.global_config['securities']
         # control the decreasing level
@@ -200,7 +200,14 @@ class AgentManager:
                                     order_list = config['order_list'])
         return new_agent
 
-        
+    def build_pr_agent(self, config):
+        new_agent = agent.ParallelAgent(_id = config['_id'],
+                                        start_cash = config['cash'],
+                                        start_securities = config['securities'],
+                                        bid_side = config['bid_side'],
+                                        range_of_price = config['range_of_price'],
+                                        range_of_quantity = config['range_of_quantity'])
+        return new_agent
 
     def type_abbreviation(self, _type):
         if _type == "ZeroIntelligenceAgent":
@@ -219,5 +226,7 @@ class AgentManager:
             return "ra"
         elif _type == "DahooAgent":
             return "dh"
+        elif _type == "ParallelAgent":
+            return "pr"
         else:
             raise Exception(f"No {_type} agent")

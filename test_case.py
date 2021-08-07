@@ -268,35 +268,61 @@ class TestCase:
 
         assert round(ask_hedge_agent.cash, 2) == ask_hedge_final_cash
         assert ask_hedge_agent.holdings['TSMC'] == ask_hedge_final_holding
-        
-        
-        # assert bid_hedge_agent.orders['TSMC'] == []
-        # assert bid_hedge_agent.orders_history['TSMC'] == [bid_order_id]
-        # bid_order = tsmc.orders[bid_order_id]
-        # transaction = TransactionRecord(0, filled_price, filled_quantity)
-        # bid_order_record = OrderRecord(order = bid_order,
-        #                                placed_time = 0,
-        #                                finished_time = 0,
-        #                                transactions = [transaction],
-        #                                filled_quantity = filled_quantity,
-        #                                filled_amount = filled_amount,
-        #                                cancellation = False,
-        #                                transaction_cost=filled_amount*transaction_rate)
-        # ask_order = tsmc.orders[ask_order_id]
-        # ask_order_record = OrderRecord(order = ask_order,
-        #                                placed_time = 0,
-        #                                finished_time = None,
-        #                                transactions = [transaction],
-        #                                filled_quantity = filled_quantity,
-        #                                filled_amount = filled_amount,
-        #                                cancellation = False,
-        #                                transaction_cost=filled_amount*transaction_rate)
 
-        # assert tsmc.bids_price == []
-        # assert tsmc.asks_price == [9.1]
-        # assert tsmc.asks_volume == {9.1 : 1}
-        # assert tsmc.asks_orders == {9.1 : [ask_order_id]}
-        # assert tsmc.orders == {bid_order_id: bid_order, ask_order_id: ask_order}
+    def test_call_market(self):
+        config_path = Path("config/test_call_market.json.json")
+        config = json.loads(config_path.read_text())
+        cash = config['Agent']['Global']['cash']
+        holdings = config['Agent']['Global']['securities']['TSMC']
+        transaction_rate = config['Market']['Structure']['transaction_rate']
+
+        bid_agent_name = f"{config['Agent']['TestAgent'][0]['name']}_1"
+        bid_agent_order_list = [{'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 9, 'quantity': 2, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 10, 'quantity': 2, 'time': 1},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 11, 'quantity': 2, 'time': 2},]
+
+        time = len(bid_agent_order_list)
+        config['Agent']['TestAgent'][0]['order_list'] = bid_agent_order_list
+        bid_agent_final_cash = round(cash - 4 * 2 * 100 * (1+transaction_rate) + 8 * 2 * 100 * (1-transaction_rate), 2)
+        bid_agent_final_holding = holdings - 5
+        # The first two bid orders will be cancelled
+        # So the final cash is ( origin - 4 * 2 * 100 * (1+0.002) ) and the final holdings is ( origin - 5)
+
+        ask_agent_name = f"{config['Agent']['TestAgent'][1]['name']}_1"
+        ask_agent_order_list = [{'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 7, 'quantity': 5, 'time': 4},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 12, 'quantity': 2, 'time': 5},]
+
+        config['Agent']['TestAgent'][1]['order_list'] = ask_agent_order_list
+        ask_agent_final_cash = round(cash - 8 * 2 * 100 * (1+transaction_rate), 2)
+        ask_agent_final_holding = holdings + 2
+
+        # The only transaction is ask 1 at price 8. The order remain is bid 1 at price 13
+        # So the final cash is ( origin + 8 * 1 * 100 * (1-0.002) - 13 * 1 * 100 * (1+0.002) ) and the final holding is ( origin - 1)
+
+
+        core = Core(config)
+        orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = 8)
+        tsmc: OrderBook = orderbooks['TSMC']
+
+        bid_agent_id = agent_manager.group_agent[bid_agent_name][0]
+        bid_agent = agent_manager.agents[bid_agent_id]
+
+        ask_agent_id = agent_manager.group_agent[ask_agent_name][0]
+        ask_agent = agent_manager.agents[ask_agent_id]
+
+        # bid_order_id = bid_agent.orders_history['TSMC'][0]
+        # filled_price = bid_price_list[0]
+        # filled_quantity = bid_quantity_list[0]
+        # filled_amount = filled_price * filled_quantity * 100
+
+        assert round(bid_agent.cash, 2) == bid_agent_final_cash
+        assert bid_agent.holdings['TSMC'] == bid_agent_final_cash
+
+        assert round(ask_agent.cash, 2) == ask_agent_final_cash
+        assert ask_agent.holdings['TSMC'] == ask_agent_final_holding
+
+        
+        
 
 if __name__ == '__main__':
     testcase = TestCase()

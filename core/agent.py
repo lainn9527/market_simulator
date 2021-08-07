@@ -113,7 +113,7 @@ class Agent:
         cost = round(quantity * price * stock_size * (1 + transaction_rate), 2)
 
         # Check if there are ask orders and if so, hedge them.
-        self.check_bid_hedge(code, price, quantity)
+        # self.check_bid_hedge(code, price, quantity)
 
         if price <= 0 or quantity == 0 or cost > self.cash:
             return
@@ -132,7 +132,7 @@ class Agent:
         price = round(tick_size * ((price+1e-6) // tick_size), 2)
 
         # Check if there are bid orders and if so, hedge them.
-        self.check_ask_hedge(code, price, quantity)
+        # self.check_ask_hedge(code, price, quantity)
 
         
         if quantity == 0 or price <= 0:
@@ -206,7 +206,7 @@ class Agent:
     
     def check_bid_hedge(self, code, price, quantity):
         for order in self.orders[code]:
-            if order in self.cancelled_orders:
+            if order in self.cancelled_orders[code]:
                 continue
             order_record = self.core.get_order_record(code, order)
             if order_record.order.bid_or_ask == 'ASK' and price >= order_record.order.price:
@@ -216,7 +216,7 @@ class Agent:
 
     def check_ask_hedge(self, code, price, quantity):
         for order in self.orders[code]:
-            if order in self.cancelled_orders:
+            if order in self.cancelled_orders[code]:
                 continue
             order_record = self.core.get_order_record(code, order)
             if order_record.order.bid_or_ask == 'BID' and price <= order_record.order.price:
@@ -254,8 +254,8 @@ class Agent:
             self.holdings[code] += refund_security
             self.reserved_holdings[code] -= refund_security
         
-        if order_id in self.cancelled_orders:
-            self.cancelled_orders.remove(order_id)
+        if order_id in self.cancelled_orders[code]:
+            self.cancelled_orders[code].remove(order_id)
         self.orders[code].remove(order_id)
         self.orders_history[code].append(order_id)
 
@@ -286,14 +286,18 @@ class Agent:
     def get_counter(cls):
         return cls.num_of_agent
     
-    
 class RLAgent(Agent):
     num_of_agent = 0
     VALID_ACTION = 1
     INVALID_ACTION = 2
     HOLD = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None):
-        super().__init__(_id, 'rl', start_cash = start_cash, start_securities = start_securities)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100):
+        super().__init__(_id = _id, 
+                         _type = 'rl',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = 1)
         RLAgent.add_counter()
         self.action_status = RLAgent.HOLD
     
@@ -337,7 +341,12 @@ class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
     def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
-        super().__init__(_id, 'zi', start_cash, start_securities, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'zi',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = 1)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -415,7 +424,12 @@ class ZeroIntelligenceAgent(Agent):
 class RandomAgent(Agent):
     num_of_agent = 0
     def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, time_window = 50, k = 3.85, mean = 1.01):
-        super().__init__(_id, 'ra', start_cash, start_securities, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'ra',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = 1)
         RandomAgent.add_counter()
         self.mean = mean
         self.time_window = time_window
@@ -464,7 +478,13 @@ class RandomAgent(Agent):
 class TrendAgent(Agent):
     num_of_agent = 0
     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id, 'tr', start_cash, start_securities, risk_preference, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'tr',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = risk_preference)
+
         TrendAgent.add_counter()
         self.strategy = strategy
         self.time_window = time_window
@@ -537,7 +557,13 @@ class TrendAgent(Agent):
 class MeanRevertAgent(Agent):
     num_of_agent = 0
     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id, 'mr', start_cash, start_securities, risk_preference, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'mr',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = risk_preference)
+
         MeanRevertAgent.add_counter()
         self.strategy = strategy
         self.time_window = time_window
@@ -612,7 +638,13 @@ class MeanRevertAgent(Agent):
 class MomentumAgent(Agent):
     num_of_agent = 0
     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, time_window = 100):
-        super().__init__(_id, 'mt', start_cash, start_securities, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'mt',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = 1)
+
         MomentumAgent.add_counter()
         self.time_window = time_window
         self.local_minimum = None
@@ -645,8 +677,14 @@ class MomentumAgent(Agent):
     
 class FundamentalistAgent(Agent):
     num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, securities_value = None):
-        super().__init__(_id, 'mr', start_cash, start_securities, average_cost)
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, securities_value = None, risk_preference = 1):
+        super().__init__(_id = _id, 
+                         _type = 'fa',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = risk_preference)
+
         FundamentalistAgent.add_counter()
         self.securities_value = securities_value
     
@@ -680,7 +718,12 @@ class FundamentalistAgent(Agent):
 class DahooAgent(Agent):
     num_of_agent = 0
     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, securities_value = None):
-        super().__init__(_id, 'mr', start_cash, start_securities, average_cost)
+        super().__init__(_id = _id, 
+                         _type = 'da',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost)
+
         DahooAgent.add_counter()
         self.securities_value = securities_value
         self.status = 'HOLD'
@@ -810,6 +853,78 @@ class DahooAgent(Agent):
             self.strategy_record[-1].pop('dump_number')
             self.strategy_record[-1].pop('dump_times')
             self.strategy_record[-1].pop('dump_tick')
+
+class ParallelAgent(Agent):
+    num_of_agent = 0
+    
+    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+        super().__init__(_id = _id, 
+                         _type = 'pr',
+                         start_cash = start_cash,
+                         start_securities = start_securities,
+                         average_cost = average_cost,
+                         risk_preference = 1)
+                         
+        ParallelAgent.add_counter()
+        self.range_of_quantity = range_of_quantity
+        self.range_of_price = range_of_price
+        self.bid_side = bid_side
+
+    def step(self):
+        super().step()
+        # to trade?
+        # if np.random.binomial(n = 1, p = 0.1) == 1:
+        self.provide_volatility()
+
+    def provide_liquidity(self):
+        code = np.random.choice(list(self.holdings.keys()))
+        current_price = self.core.get_current_price(code)
+        quantity = np.random.randint(1, self.range_of_quantity)
+        tick_size = self.core.get_tick_size(code)
+
+        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
+            best_bid = self.core.get_best_asks(code, 1)
+            best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
+            price = round(best_bid - np.random.randint(0, self.range_of_price) * tick_size , 2)
+            self.place_limit_bid_order(code, quantity, price)
+        else:
+            # ask
+            best_ask = self.core.get_best_bids(code, 1)
+            best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
+            price = round(best_ask + np.random.randint(0, self.range_of_price) * tick_size, 2)
+            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+
+    def provide_volatility(self):
+        # which one?
+        code = np.random.choice(list(self.holdings.keys()))
+        current_price = self.core.get_current_price(code)
+        quantity = np.random.randint(1, self.range_of_quantity)
+        tick_size = self.core.get_tick_size(code)
+        price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price) * tick_size , 2)
+        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
+            self.place_limit_bid_order(code, quantity, price)
+        else:
+            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+
+    def generate_order(self):
+        # which one?
+        code = np.random.choice(list(self.holdings.keys()))
+        current_price = self.core.get_current_price(code)
+        quantity = np.random.randint(1, self.range_of_quantity)
+        tick_size = self.core.get_tick_size(code)
+
+        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
+            # bid
+            best_bid = self.core.get_best_bids(code, 1)
+            best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
+            price = round(best_bid - np.random.randint(0, self.range_of_price) * tick_size , 2)
+            self.place_limit_bid_order(code, quantity, price)
+        else:
+            # ask
+            best_ask = self.core.get_best_asks(code, 1)
+            best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
+            price = round(best_ask + np.random.randint(0, self.range_of_price) * tick_size, 2)
+            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
 
 
 class BrokerAgent(Agent):

@@ -51,19 +51,21 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
 if __name__ == '__main__':
     config_path = Path("config/herd.json")
     config = json.loads(config_path.read_text())
-    config['Core']['show_price'] = False
-    experiment_name = 'dahoo'
+
+    experiment_name = 'new_tr_security_cash_propotion'
     result_dir = Path("result") / experiment_name
-    # simulate(result_dir / 'stock_numbe2', 5, config, random_seed=9528)
-    scale = [0.01, 0.05] + [0.1 * i for i in range(1, 11)]
-    cashes = [ int(i * 1.9e9) for i in scale]
-    with Pool(8) as pool:
-        for cash in cashes:
-            tmp_config = deepcopy(config)
-            tmp_config['Agent']['DahooAgent'][0]['cash'] = cash
-            pool.apply_async(simulate, (result_dir / f"{int(cash//1.9e7)}_percent", 8100, tmp_config, 9527))
-        pool.close()
-        pool.join()
+    simulate(result_dir / 'stock_numbe2', 4050, config, random_seed=9528)
+    # cashes = [10000, 20000, 20000, 30000]
+    # holdings = [0, 1, 2, 2]
+    # names = ['10000_0', '10000_1', '20000_2', '30000_2']
+    # with Pool(8) as pool:
+    #     for i in range(4):
+    #         tmp_config = deepcopy(config)
+    #         tmp_config['Agent']['Global']['cash'] = cashes[i]
+    #         tmp_config['Agent']['Global']['securities']['TSMC'] = holdings[i]
+    #         pool.apply_async(simulate, (result_dir / f"{names[i]}", 4050, tmp_config, 9527))
+    #     pool.close()
+    #     pool.join()
 
 
     # config0 = deepcopy(config)

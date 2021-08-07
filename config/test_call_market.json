@@ -1,0 +1,53 @@
+{
+    "Core": {
+        "result_name": "test",
+        "timestep": 10,
+        "show_price": true
+    },
+    "Market":{
+        "Structure": {
+            "interest_rate": 0.01,
+            "interest_period": 100,
+            "clear_period": 200,
+            "transaction_rate": 0.002,
+            "order_capacity": 50
+        },
+        "Securities": {
+            "TSMC": {
+                "price": [],
+                "volume": [],
+                "value": [],
+                "dividend_ratio": 0.1,
+                "dividend_ar": 0.95,
+                "dividend_var": 0.0743,
+                "dividend_period": 100
+            }
+        }
+    },
+
+    "Agent": {
+        "Global": {
+            "cash": 100000,
+            "alpha": 2,
+            "risk_preference_mean": 0,
+            "risk_preference_var": 1,
+            "securities": {
+                "TSMC": 5
+            }
+        },
+        "TestAgent": [
+            {
+                "name": "bid_agent",
+                "number": 1,
+                "order_list": []
+            },
+            {
+                "name": "ask_agent",
+                "number": 1,
+                "order_list": []
+            }
+        ]
+        
+
+    }
+}

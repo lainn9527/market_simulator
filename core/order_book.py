@@ -43,7 +43,6 @@ class OrderBook:
         self.code = code
         self.value = value
         self.tick_size = None
-        self.history_order = dict()
         self.dividend_ratio = dividend_ratio
         self.dividend_ar = dividend_ar
         self.dividend_var = dividend_var
@@ -290,6 +289,7 @@ class OrderBook:
         self.asks_orders[price].append(order_id)
         self.asks_volume[price] += quantity
         self.asks_sum += quantity
+
     # def handle_market_order(self, order, time):
     #     time = self.market.get_time()
 
@@ -470,8 +470,6 @@ class OrderBook:
     def check_spread(self):
         if len(self.bids_price) <= 1 or len(self.asks_price) <= 0:
             return
-        if self.bids_price[0] >= self.asks_price[0]:
-            print("for break")
 
     def get_order(self, order_id):
         return self.orders[order_id]
@@ -479,3 +477,125 @@ class OrderBook:
     def _generate_order_id(self):
         self.num_of_order += 1
         return f"{self.code}_{self.num_of_order:05}"
+
+class CallOrderBook(OrderBook):
+    def __init__(self, market, code, dividend_ratio, dividend_ar, dividend_var, dividend_period, price, volume, value):
+        super().__init__(market, code, value, dividend_ratio, dividend_ar, dividend_var, dividend_period)
+        self.steps_record['price'] = price
+        self.steps_record['volume'] = volume
+        self.steps_record['amount'] = [price * volume for price, volume in zip(price, volume)]
+        self.steps_record['value'] = value
+    
+    def set_price(self):
+        self.tick_size = self.market.determine_tick_size(self.steps_record['price'][-1])
+        init_record = {
+            'price': self.steps_record['price'][-1],
+            'volume': self.steps_record['volume'][-1],
+            'value': self.steps_record['value'][-1],
+            'amount': self.steps_record['amount'][-1]
+        }
+        self.update_record(**init_record)
+
+        
+    def handle_bid_order(self, order_id):
+        order = self.orders[order_id].order
+        # update bid/ask if the limit order is partially filled and placed order
+        self.quote_bid_order(order_id)
+    
+    def handle_ask_order(self, order_id):
+        order = self.orders[order_id].order
+        # update bid/ask if the limit order is partially filled and placed order
+        self.quote_ask_order(order_id)
+
+    def match_order(self):
+        # locate the best bid at asks
+        if self.bids_price[0] < self.asks_price[0]:
+            return
+
+        # construct accumulated volume of bids and asks
+        accum_bid_volume = self.bids_volume.copy()
+        accum_ask_volume = self.asks_volume.copy()
+        for i in range(1, len(self.bids_price)):
+            accum_bid_volume[self.bids_price[i]] += accum_bid_volume[self.bids_price[i-1]]
+        for i in range(1, len(accum_ask_volume)):
+            accum_ask_volume[self.asks_price[i]] += accum_ask_volume[self.asks_price[i-1]]
+
+        # for bid_price in self.bids_price
+        max_match_volume = 0
+        max_match_price = 0
+
+        bid_pointer = 0
+        ask_pointer = len(self.asks_price) - 1
+        while bid_pointer < len(self.bids_price) and ask_pointer >= 0:
+            bid_price = self.bids_price[bid_pointer]
+            ask_price = self.asks_price[ask_pointer]
+            if bid_price < ask_price:
+                ask_pointer -= 1
+            elif bid_price >= ask_price:
+                if max_match_volume < min(accum_bid_volume[bid_price], accum_ask_volume[ask_price]):
+                    max_match_volume = min(accum_bid_volume[bid_price], accum_ask_volume[ask_price])
+                    max_match_price = bid_price
+                bid_pointer += 1
+                if bid_price == ask_price:
+                    ask_pointer -= 1
+
+
+
+        
+        if max_match_volume == 0:
+            return 0
+
+        return max_match_price, max_match_volume
+    
+    def fill_orders(self, match_price, match_volume):
+        # fill the orders
+        last_price_quantity = min(self.bids_volume[match_price], self.asks_volume[match_price])
+
+        last_bid_remain = match_volume
+        for bid_price in self.bids_price:
+            if bid_price < match_price:
+                break
+            for bid_order_id in self.bids_orders[bid_price]:
+                bid_quantity = self.orders[bid_order_id].order.quantity
+                self.fill_order(bid_order_id, match_price, min(bid_quantity, last_bid_remain))
+                last_bid_remain -= bid_quantity
+                if last_bid_remain <= 0:
+                    break
+
+        last_ask_remain = match_volume
+        for ask_price in self.asks_price:
+            if last_ask_remain <= 0 or ask_price > match_price:
+                break
+            for ask_order_id in self.asks_orders[ask_price]:
+                ask_quantity = self.orders[ask_order_id].order.quantity
+                self.fill_order(ask_order_id, match_price, min(ask_quantity, last_ask_remain))
+                last_ask_remain -= ask_quantity
+                if last_ask_remain <= 0:
+                    break
+
+        # update
+        updated_info = {'price': match_price, 'volume': match_volume, 'amount': match_price * match_volume}
+        self.update_record(**updated_info)
+
+    def update_record(self, **name_val):
+        self.current_record.update(name_val)
+    
+    def step_summarize(self):
+        for key in self.steps_record.keys():
+            self.steps_record[key].append(self.current_record[key])
+
+        # self.orders = dict()
+        self.current_orders = []
+        self.bids_price = list()
+        self.bids_volume = defaultdict(int)
+        self.bids_orders = defaultdict(list)
+        self.bids_sum = 0
+        self.asks_price = list()
+        self.asks_volume = defaultdict(int)
+        self.asks_orders = defaultdict(list)
+        self.asks_sum = 0
+        self.price_volume = defaultdict(int)
+
+        self.num_of_order = 0
+        self.num_of_cancelled_order = 0
+        # self.current_record = defaultdict(float)

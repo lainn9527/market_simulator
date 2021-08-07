@@ -1,7 +1,9 @@
 import random
 from datetime import time, timedelta
 
-from .order_book import OrderBook
+from numpy.lib import type_check
+
+from .order_book import OrderBook, CallOrderBook
 from .message import Message
 from .order import LimitOrder, MarketOrder
 
@@ -25,6 +27,7 @@ class Market:
 
         self.check_volatility()
         self.check_liquidity()
+
         if self.get_time() % self.clear_period == 0:
             for orderbook in self.orderbooks.values():
                 orderbook.clear_orders()
@@ -43,7 +46,6 @@ class Market:
         msg = Message('ALL_AGENTS', 'OPEN_SESSION', 'market', 'agents', None)
         self.announce_message(msg)
         self.is_trading = True
-
         
 
     def close_session(self):
@@ -126,6 +128,8 @@ class Market:
         return self.orderbooks[code].current_record['price']
     
     def get_records(self, code, _type, step = 1, from_last = True):
+        if _type in ['close', 'average', 'open'] and _type not in self.orderbooks[code].steps_record.keys():
+            _type = 'price'
         if from_last:
             return self.orderbooks[code].steps_record[_type][:-1*(step+1):-1]
         else:
@@ -150,7 +154,10 @@ class Market:
         return self.core.timestep
     
     def get_value(self, code):
-        return self.orderbooks[code].value
+        if type(self.orderbooks[code].value) is list:
+            return self.orderbooks[code].value[-1]
+        else:
+            return self.orderbooks[code].value
 
     def market_stats(self):
         stats = {}
@@ -176,3 +183,32 @@ class Market:
             return 1
         else:
             return 5
+
+class CallMarket(Market):
+    def __init__(self, core, interest_rate, interest_period, securities, clear_period, transaction_rate):
+        self.core = core
+        self.is_trading = False
+        self.stock_size = 100
+        self.interest_rate = interest_rate
+        self.interest_period = interest_period
+        self.clear_period = clear_period
+        self.transaction_rate = transaction_rate
+        self.orderbooks = {code: CallOrderBook(self, code, **value) for code, value in securities.items()}
+
+    def step(self):
+        for orderbook in self.orderbooks.values():
+            match_price, max_match_volume = orderbook.match_order()
+            orderbook.fill_orders(match_price, max_match_volume)
+            orderbook.clear_orders()
+            orderbook.step_summarize()
+            
+
+        # self.check_volatility()
+        # self.check_liquidity()
+
+        if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
+            self.issue_interest()
+            # adjust value
+            
+    def get_current_price(self, code):
+        return self.orderbooks[code].current_record['price']

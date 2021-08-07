@@ -4,7 +4,7 @@ from typing import Dict, List
 from gym.utils import seeding
 
 # from core import agent
-from .market import Market
+from .market import Market, CallMarket
 from .order import LimitOrder, MarketOrder
 from .agent_manager import AgentManager
 
@@ -21,7 +21,8 @@ class Core:
 
     def __init__(
         self,
-        config: Dict
+        config: Dict,
+        market_type: str="continuous"
     ) -> None:
 
         # initialize all things
@@ -32,12 +33,23 @@ class Core:
         self.show_price = config['Core']['show_price']
         self.order_capacity = config['Market']['Structure']['order_capacity']
         self.agent_manager = AgentManager(self, config['Agent'])
-        self.market = Market(self,
-                             interest_rate=config['Market']['Structure']['interest_rate'],
-                             interest_period=config['Market']['Structure']['interest_period'],
-                             clear_period=config['Market']['Structure']['clear_period'],
-                             transaction_rate=config['Market']['Structure']['transaction_rate'],
-                             securities=config['Market']['Securities'])
+
+        if market_type == "continuous":
+            self.market = Market(self,
+                                interest_rate=config['Market']['Structure']['interest_rate'],
+                                interest_period=config['Market']['Structure']['interest_period'],
+                                clear_period=config['Market']['Structure']['clear_period'],
+                                transaction_rate=config['Market']['Structure']['transaction_rate'],
+                                securities=config['Market']['Securities'])
+        
+        elif market_type == "call":
+            self.market = CallMarket(self,
+                                interest_rate=config['Market']['Structure']['interest_rate'],
+                                interest_period=config['Market']['Structure']['interest_period'],
+                                clear_period=config['Market']['Structure']['clear_period'],
+                                transaction_rate=config['Market']['Structure']['transaction_rate'],
+                                securities=config['Market']['Securities'])
+
 
     def run(self, num_simulation=100, num_of_timesteps=100000, random_seed=9527):
         # time
@@ -158,4 +170,13 @@ class Core:
                  'best_ask': self.get_records(code='TSMC', _type = 'ask', step = lookback),
                  'bids': self.get_best_bids(code='TSMC', number = best_price),
                  'asks': self.get_best_asks(code='TSMC', number = best_price),}
+        return state
+
+    def get_parallel_env_state(self, lookback, best_price):
+        state = {'average': self.get_records(code='TSMC', _type = 'average', step = lookback),
+                 'close': self.get_records(code='TSMC', _type = 'close', step = lookback),
+                 'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback),
+                 'highest': self.get_records(code='TSMC', _type = 'highest', step = lookback),
+                 'lowest': self.get_records(code='TSMC', _type = 'lowest', step = lookback),
+        }
         return state

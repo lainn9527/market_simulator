@@ -20,24 +20,25 @@ from core.utils import write_records
 from .rl_agent import FeatureExtractor
 
 class TradingEnv(gym.Env):
-    # Because of google colab, we cannot implement the GUI ('human' render mode)
     metadata = {'render.modes': ['console']}
 
     def __init__(self, config: Dict):
         super(TradingEnv, self).__init__()
+        '''
+        Action Space
+            1. Discrete 3 - BUY[0], SELL[1], HOLD[2]
+            2. Discrete 9 - TICK_-4[0], TICK_-3[1], TICK_-2[2], TICK_-1[3], TICK_0[4], TICK_1[5], TICK_2[6], TICK_3[7], TICK_4[8]
+            3. Discrete 5 - VOLUME_1[0], VOLUME_2[1], VOLUME_3[2], VOLUME_4[3], VOLUME_5[4],
+        
+        State Space
+            1. Price and Volume: close, highest, lowest, average price, and volume of previous [lookback] days -> 5 * [lookback]
+            2. Agent: cash, holdings -> 2
+            Total: 5 * [lookback] + 2
+        '''
         self.core = None
         self.config = config
-        '''
-        1. Discrete 3 - BUY[0], SELL[1], HOLD[2]
-        2. Discrete 9 - TICK_-4[0], TICK_-3[1], TICK_-2[2], TICK_-1[3], TICK_0[4], TICK_1[5], TICK_2[6], TICK_3[7], TICK_4[8]
-        3. Discrete 5 - VOLUME_1[0], VOLUME_2[1], VOLUME_3[2], VOLUME_4[3], VOLUME_5[4],
-        '''
         self.action_space = spaces.MultiDiscrete([3, 9, 5])
-        self.observation_space = spaces.Dict({
-            'orderbook': spaces.Box(low = 0, high = 1000, shape=(2, self.config['Env']['obs']['best_price'], )),
-            'price': spaces.Box(low = 0, high = 2000, shape=(5, self.config['Env']['obs']['lookback'],)),
-            'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
-        })
+        self.observation_space = spaces.Box(low = 0, high = 10000000, shape=(5 * self.config['Env']['obs']['best_price'] + 2, ))
         self.start_state = None
         self.states = []
         self.train = True
@@ -48,18 +49,15 @@ class TradingEnv(gym.Env):
         return [seed]
 
     def reset(self):
-        # self.seed(9527)
+        # register the core for the market and agents
         config = deepcopy(self.config)
         self.core = Core(config)
         self.core.start_time = datetime.now()
-        # register the core for the market and agents
         self.core.random_seed = 9527
         self.core.market.start()
         self.core.agent_manager.start(self.core.market.get_securities())
         self.core.timestep = 0
         self.core.market.open_session()
-        for timestep in range(50):
-            self.core.step()
 
         self.core.agent_manager.add_rl_agent(self.config['Env']['agent'])
         print("Set up the following agents:")
@@ -156,28 +154,13 @@ class TradingEnv(gym.Env):
         obs_config = self.config['Env']['obs']
         timestep = self.core.timestep
 
-        market_stats = self.core.get_env_state(obs_config['lookback'], obs_config['best_price'])
-        bid_volumes = [bid['volume'] for bid in market_stats['bids']] + [0 for i in range(obs_config['best_price'] - len( market_stats['bids']))]
-        ask_volumes = [ask['volume'] for ask in market_stats['asks']] + [0 for i in range(obs_config['best_price'] - len( market_stats['asks']))]
-
-        orderbook = {
-            'bid_volumes': bid_volumes,
-            'ask_volumes': ask_volumes,
-        }
-        
-        # agent_order_ids = self.core.agent_manager.agents['rl'].orders['TSMC']
-        # agent_price_volume = defaultdict(int)
-        # for order_id in agent_order_ids:
-        #     order = self.core.market.orderbooks['TSMC'].orders[order_id].order
-        #     agent_price_volume[order['price']] += order['quantity']
-        # bid_price = [ price for price in self.orderbooks['TSMC'].bids_price[:5]]
-        # ask_price = [ price for price in self.orderbooks['TSMC'].asks_price[:5]]
+        market_stats = self.core.get_parallel_env_state(obs_config['lookback'])
         price = {
-            'average': market_stats['average'],
             'close': market_stats['close'],
-            'best_bid': market_stats['best_bid'],
-            'best_ask': market_stats['best_ask'],
-            'mid': [round( (bid+ask)/2, 2) for bid, ask in zip(market_stats['best_bid'], market_stats['best_ask'],)]
+            'highest': market_stats['highest'],
+            'lowest': market_stats['lowest'],
+            'average': market_stats['average'],
+            'volume': market_stats['volume'],
         }
 
         rl_agent_id = self.config['Env']['agent']['id']
@@ -186,7 +169,6 @@ class TradingEnv(gym.Env):
                     'wealth': self.core.agent_manager.agents[rl_agent_id].wealth,}
         state = {
             'timestep': timestep,
-            'orderbook': orderbook,
             'price': price,
             'agent': rl_agent
         }
@@ -204,6 +186,3 @@ class TradingEnv(gym.Env):
         print(f"At: {self.core.timestep}, the market state is:\n{self.core.market.market_stats()}\n")
         if self.core.timestep % 100 == 0:
             print(f"==========={self.core.timestep}===========\n")
-
-
-        
