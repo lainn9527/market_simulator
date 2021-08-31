@@ -485,6 +485,8 @@ class CallOrderBook(OrderBook):
         self.steps_record['volume'] = volume
         self.steps_record['amount'] = [price * volume for price, volume in zip(price, volume)]
         self.steps_record['value'] = value
+        self.steps_record['bid'] = []
+        self.steps_record['ask'] = []
     
     def set_price(self):
         self.tick_size = self.market.determine_tick_size(self.steps_record['price'][-1])
@@ -492,7 +494,7 @@ class CallOrderBook(OrderBook):
             'price': self.steps_record['price'][-1],
             'volume': self.steps_record['volume'][-1],
             'value': self.steps_record['value'][-1],
-            'amount': self.steps_record['amount'][-1]
+            'amount': self.steps_record['amount'][-1],
         }
         self.update_record(**init_record)
 
@@ -509,10 +511,14 @@ class CallOrderBook(OrderBook):
 
     def match_order(self):
         # locate the best bid at asks
-        if self.bids_price[0] < self.asks_price[0]:
+        if len(self.bids_price) == 0 or len(self.asks_price) == 0:
+            print("No quote")
+            return
+        elif self.bids_price[0] < self.asks_price[0]:
+            print("No match")
             return
 
-        # construct accumulated volume of bids and asks
+        # construct accumulated volume of bids and asksㄋ
         accum_bid_volume = self.bids_volume.copy()
         accum_ask_volume = self.asks_volume.copy()
         for i in range(1, len(self.bids_price)):
@@ -524,24 +530,37 @@ class CallOrderBook(OrderBook):
         max_match_volume = 0
         max_match_price = 0
 
-        bid_pointer = 0
-        ask_pointer = len(self.asks_price) - 1
-        while bid_pointer < len(self.bids_price) and ask_pointer >= 0:
-            bid_price = self.bids_price[bid_pointer]
-            ask_price = self.asks_price[ask_pointer]
-            if bid_price < ask_price:
-                ask_pointer -= 1
-            elif bid_price >= ask_price:
-                if max_match_volume < min(accum_bid_volume[bid_price], accum_ask_volume[ask_price]):
-                    max_match_volume = min(accum_bid_volume[bid_price], accum_ask_volume[ask_price])
-                    max_match_price = bid_price
-                bid_pointer += 1
-                if bid_price == ask_price:
+        if np.random.binomial(n = 1, p = 0.5) == 1:
+            bid_pointer = 0
+            ask_pointer = len(self.asks_price) - 1
+            while bid_pointer < len(self.bids_price) and ask_pointer >= 0:
+                bid_price = self.bids_price[bid_pointer]
+                ask_price = self.asks_price[ask_pointer]
+                if bid_price < ask_price:
                     ask_pointer -= 1
+                elif bid_price >= ask_price:
+                    if max_match_volume < min(accum_bid_volume[bid_price], accum_ask_volume[ask_price]):
+                        max_match_volume = min(accum_bid_volume[bid_price], accum_ask_volume[ask_price])
+                        max_match_price = bid_price
+                    bid_pointer += 1
+                    if bid_price == ask_price:
+                        ask_pointer -= 1
+        else:
+            bid_pointer = len(self.bids_price) - 1
+            ask_pointer = 0
+            while ask_pointer < len(self.asks_price) and bid_pointer >= 0:
+                bid_price = self.bids_price[bid_pointer]
+                ask_price = self.asks_price[ask_pointer]
+                if ask_price > bid_price:
+                    bid_pointer -= 1
+                elif ask_price <= bid_price:
+                    if max_match_volume < min(accum_bid_volume[bid_price], accum_ask_volume[ask_price]):
+                        max_match_volume = min(accum_bid_volume[bid_price], accum_ask_volume[ask_price])
+                        max_match_price = ask_price
+                    ask_pointer += 1
+                    if bid_price == ask_price:
+                        bid_pointer -= 1
 
-
-
-        
         if max_match_volume == 0:
             return 0
 
@@ -553,7 +572,7 @@ class CallOrderBook(OrderBook):
 
         last_bid_remain = match_volume
         for bid_price in self.bids_price:
-            if bid_price < match_price:
+            if last_bid_remain <= 0 or bid_price < match_price:
                 break
             for bid_order_id in self.bids_orders[bid_price]:
                 bid_quantity = self.orders[bid_order_id].order.quantity
@@ -574,8 +593,12 @@ class CallOrderBook(OrderBook):
                     break
 
         # update
-        updated_info = {'price': match_price, 'volume': match_volume, 'amount': match_price * match_volume}
+        updated_info = {'price': match_price, 'volume': match_volume, 'amount': round(match_price * match_volume, 2), 'bid': self.bids_sum, 'ask': self.asks_sum}
         self.update_record(**updated_info)
+
+    def clear_orders(self):
+        for order_id in self.current_orders[:]:
+            self.cancel_order(order_id)
 
     def update_record(self, **name_val):
         self.current_record.update(name_val)

@@ -6,14 +6,15 @@ from time import perf_counter
 from datetime import timedelta
 from typing import Dict
 from pathlib import Path
-from stable_baselines3.a2c import a2c
+from pettingzoo.utils.wrappers import base
 from stable_baselines3.ppo import ppo
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.monitor import Monitor
+from supersuit import pettingzoo_env_to_vec_env_v0, concat_vec_envs_v0
 
 from env.utils import write_rl_records
-from env.rl_agent import FeatureExtractor
-from env.trading_env import TradingEnv
+from env.rl_agent import ParallelFeatureExtractor
+from env.parallel_trading_env import ParallelTradingEnv
 from env.utils import TrainingInfoCallback, evaluate
 
 def train_model(train_config: Dict, env_config: Dict):
@@ -27,13 +28,14 @@ def train_model(train_config: Dict, env_config: Dict):
     random_seed = 9527
     np.random.seed(random_seed)
     random.seed(random_seed)
-    trading_env = TradingEnv(env_config)
-    eval_env = TradingEnv(env_config)
-    # trading_env = Monitor(trading_env)
+    trading_env = ParallelTradingEnv(env_config)
+    trading_env = pettingzoo_env_to_vec_env_v0(trading_env)
+    trading_env = concat_vec_envs_v0(trading_env, 1, num_cpus = 1, base_class = 'stable_baselines3')
+    # eval_env = ParallelTradingEnv(env_config)
 
 
     policy_kwargs = dict(
-        features_extractor_class=FeatureExtractor,
+        features_extractor_class = ParallelFeatureExtractor,
     )
     '''
     n_steps: collect n steps in the buffer and update
@@ -51,34 +53,25 @@ def train_model(train_config: Dict, env_config: Dict):
     then in every 1024 steps, the model will train on batch of size 64 for 10 times and the total steps are 10240.
     So the model will be updated for (10240 / 1024) * (1024 / 64) * 10 = 1600 times
     '''
+    
     if train_config['resume']:
         model = ppo.PPO.load(train_config['resume_model_dir'])
     else:
-        model = a2c.A2C(policy = "MultiInputPolicy",
+        model = ppo.PPO(policy = "MlpPolicy",
                         env = trading_env,
                         learning_rate = train_config['learning_rate'],
                         n_steps = train_config['n_steps'],
+                        batch_size = train_config['batch_size'],
+                        n_epochs = train_config['n_epochs'],
                         verbose = 1,
                         tensorboard_log = train_output_dir,
                         policy_kwargs = policy_kwargs)
-    # if train_config['resume']:
-    #     model = ppo.PPO.load(train_config['resume_model_dir'])
-    # else:
-    #     model = ppo.PPO(policy = "MultiInputPolicy",
-    #                     env = trading_env,
-    #                     learning_rate = train_config['learning_rate'],
-    #                     n_steps = train_config['n_steps'],
-    #                     batch_size = train_config['batch_size'],
-    #                     n_epochs = train_config['n_epochs'],
-    #                     verbose = 1,
-    #                     tensorboard_log = train_output_dir,
-    #                     policy_kwargs = policy_kwargs)
     # down tuan
     callback = TrainingInfoCallback(check_freq = train_config['n_steps'],
                                     result_dir = train_output_dir)
     
-    model.learn(total_timesteps = train_config['total_timesteps'],
-                callback = callback)
+    # model.learn(total_timesteps = train_config['total_timesteps'], callback = callback)
+    model.learn(total_timesteps = train_config['total_timesteps'])
     
     model.save(train_config['result_dir'] / "model")
     return model
@@ -87,7 +80,7 @@ def test(env_config, model, n_steps, output_dir):
     output_dir = output_dir / 'test'
     if not output_dir.exists():
         output_dir.mkdir()
-    env = TradingEnv(env_config)
+    env = ParallelTradingEnv(env_config)
     obs = env.reset()
 
     for step in range(n_steps):
@@ -102,18 +95,18 @@ def test(env_config, model, n_steps, output_dir):
 
 if __name__=='__main__':
     training_cofig = {
-        'config_path': Path("config/herd.json"),
-        'result_dir': Path("rl_result/te/"),
+        'config_path': Path("config/call.json"),
+        'result_dir': Path("parallel/te/"),
         'resume': False,
         'resume_model_dir': Path("rl_result/noir_10300/model.zip"),
         'train': True,
         'test': False,
-        'test_steps': 16200,
+        'test_steps': 1000,
         'learning_rate': 1e-4,
-        'n_steps': 1800,
+        'n_steps': 1000,
         'batch_size': 60,
         'n_epochs': 1,
-        'total_timesteps': 16200,
+        'total_timesteps': 1000,
 
     }
     # 4:30 h = 270min = 16200s

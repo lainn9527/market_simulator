@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import gym
+from core import agent
 from collections import defaultdict
 from typing import Dict, List
 from gym import spaces
@@ -11,15 +12,14 @@ from copy import deepcopy
 from pettingzoo import ParallelEnv
 from ray.rllib.env import PettingZooEnv
 from core.core import Core
+from env.actor_critic import ActorCritic
 
 
 
 
-class ParallelTradingEnv(ParallelEnv):
-    metadata = {'render.modes': ['console']}
+class MultiTradingEnv:
 
     def __init__(self, config: Dict):
-        super(ParallelTradingEnv, self).__init__()
         '''
         Action Space
             1. Discrete 3 - BUY[0], SELL[1], HOLD[2]
@@ -33,14 +33,12 @@ class ParallelTradingEnv(ParallelEnv):
         '''
         self.config = config
         self.train = True
-        self.reward_range = (float("-inf"), float("inf"))
-        self.reset()
     
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def reset(self):
+    def reset(self, look_backs: List):
         # register the core for the market and agents
         config = deepcopy(self.config)
         config['Market']['Securities']['TSMC']['price'] = [random.gauss(100, 10) for i in range(100)]
@@ -48,41 +46,40 @@ class ParallelTradingEnv(ParallelEnv):
         config['Market']['Securities']['TSMC']['value'] = [random.gauss(100, 10) for i in range(100)]
 
         self.core = Core(config, market_type="call")
-        pr_agent_ids = self.core.parallel_env_start(random_seed = 9527)
-        self.base_price = self.core.get_base_price('TSMC')
-        self.base_volume = self.core.get_base_volume('TSMC')
+        rl_group_name = f"{config['Agent']['RLAgent'][0]['name']}_{config['Agent']['RLAgent'][0]['number']}"
+        self.agents = self.core.multi_env_start(random_seed = 9527, group_name = rl_group_name)
+        self.look_backs = {agent_id: look_backs[i] for i, agent_id in enumerate(self.agents)}
+        observation_spaces = [(2*look_backs[i] + 2) for i in range(len(self.agents))]
 
         # make the agent of market simulater the env agent
-        self.possible_agents = self.agents = pr_agent_ids
-        self.action_spaces = {agent_id: spaces.MultiDiscrete([3, 9, 5]) for agent_id in self.possible_agents}
-        self.observation_spaces = {agent_id: spaces.Box(low = 0, high = 10000000, shape=(2 * self.config['Env']['obs']['lookback'] + 2, )) for agent_id in self.possible_agents}
+        self.start_state = {agent_id: self.get_obs(agent_id = agent_id) for agent_id in self.agents}
+        self.states = {agent_id: [self.start_state[agent_id]] for agent_id in self.agents}
+        agent_obs = {agent_id: self.obs_wrapper(self.start_state[agent_id]) for agent_id in self.agents}
 
+        
         print("Set up the following agents:")
-        print(self.possible_agents)
+        print(self.agents)
 
-        self.start_state = {agent_id: self.get_obs(agent_id = agent_id) for agent_id in self.possible_agents}
-        self.states = {agent_id: [self.start_state[agent_id]] for agent_id in self.possible_agents}
-        agent_obs = {agent_id: self.obs_wrapper(self.start_state[agent_id]) for agent_id in self.possible_agents}
-
-        return agent_obs
+        return self.agents, observation_spaces, agent_obs
 
     def step(self, actions):
-        self.core.parallel_env_step(actions)
-        for agent_id in self.possible_agents:
+
+        self.core.multi_env_step(actions)
+        for agent_id in self.agents:
             self.states[agent_id].append(self.get_obs(agent_id = agent_id))
     
-        agents_obs = {agent_id: self.obs_wrapper(self.states[agent_id][-1]) for agent_id in self.possible_agents}
-        raw_rewards = {agent_id: self.reward_wrapper(agent_id, actions[agent_id]) for agent_id in self.possible_agents}
-        action_rewards = {agent_id: raw_rewards[agent_id][0] for agent_id in self.possible_agents}
-        wealth_rewards = {agent_id: raw_rewards[agent_id][1] for agent_id in self.possible_agents}
-        is_valids = {agent_id: raw_rewards[agent_id][2] for agent_id in self.possible_agents}
-        rewards = {agent_id: (action_rewards[agent_id] + wealth_rewards[agent_id]) for agent_id in self.possible_agents}
+        agents_obs = {agent_id: self.obs_wrapper(self.states[agent_id][-1]) for agent_id in self.agents}
+        raw_rewards = {agent_id: self.reward_wrapper(agent_id, actions[agent_id]) for agent_id in self.agents}
+        action_rewards = {agent_id: raw_rewards[agent_id][0] for agent_id in self.agents}
+        wealth_rewards = {agent_id: raw_rewards[agent_id][1] for agent_id in self.agents}
+        is_valids = {agent_id: raw_rewards[agent_id][2] for agent_id in self.agents}
+        rewards = {agent_id: (action_rewards[agent_id] + wealth_rewards[agent_id]) for agent_id in self.agents}
         
-        done = {agent_id: False for agent_id in self.possible_agents}
+        done = {agent_id: False for agent_id in self.agents}
         info = {}
 
         # record the action & reward in previous state (s_t-1 -> a_t, r_t)
-        for agent_id in self.possible_agents:
+        for agent_id in self.agents:
             self.states[agent_id][-2]['action'] = {'action': actions[agent_id], 'is_valid': is_valids[agent_id]}
             self.states[agent_id][-2]['reward'] = {'total_reward': rewards[agent_id], 'action_reward': action_rewards[agent_id], 'wealth_reward': wealth_rewards[agent_id]}
 
@@ -90,8 +87,7 @@ class ParallelTradingEnv(ParallelEnv):
         # if self.train and self.core.timestep % 1000 == 0:
         #     record_states = self.states[-1:-1000:-1]
 
-        print(self.core.timestep)
-        return agents_obs, rewards, done, info
+        return agents_obs, rewards
     
     def obs_wrapper(self, obs):
         price = np.array( [value for value in obs['price'].values()], dtype=np.float32)
@@ -158,10 +154,10 @@ class ParallelTradingEnv(ParallelEnv):
         return action_reward, wealth_reward, is_valid
 
     def get_obs(self, agent_id):
-        obs_config = self.config['Env']['obs']
+        look_back = self.look_backs[agent_id]
         timestep = self.core.timestep
 
-        market_stats = self.core.get_parallel_env_state(obs_config['lookback'])
+        market_stats = self.core.get_parallel_env_state(look_back)
         price = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],
@@ -179,7 +175,7 @@ class ParallelTradingEnv(ParallelEnv):
         return state
 
     def close(self):
-        orderbooks, agent_manager = self.core.env_close()
+        orderbooks, agent_manager = self.core.multi_env_close()
         return orderbooks, agent_manager, self.states
 
     def seed(self, s):

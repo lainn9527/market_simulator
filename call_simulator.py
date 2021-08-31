@@ -40,4 +40,4 @@ if __name__ == '__main__':
 
     experiment_name = 'call'
     result_dir = Path("result") / experiment_name
-    simulate(result_dir / 'test', 200, config, random_seed=9528)
+    simulate(result_dir / 'test', 1000, config, random_seed=9528)

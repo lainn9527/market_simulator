@@ -22,7 +22,8 @@ class Core:
     def __init__(
         self,
         config: Dict,
-        market_type: str="continuous"
+        market_type: str = "continuous",
+        agents_type: str = "normal"
     ) -> None:
 
         # initialize all things
@@ -34,21 +35,22 @@ class Core:
         self.order_capacity = config['Market']['Structure']['order_capacity']
         self.agent_manager = AgentManager(self, config['Agent'])
 
+
         if market_type == "continuous":
             self.market = Market(self,
-                                interest_rate=config['Market']['Structure']['interest_rate'],
-                                interest_period=config['Market']['Structure']['interest_period'],
-                                clear_period=config['Market']['Structure']['clear_period'],
-                                transaction_rate=config['Market']['Structure']['transaction_rate'],
-                                securities=config['Market']['Securities'])
+                                 interest_rate=config['Market']['Structure']['interest_rate'],
+                                 interest_period=config['Market']['Structure']['interest_period'],
+                                 clear_period=config['Market']['Structure']['clear_period'],
+                                 transaction_rate=config['Market']['Structure']['transaction_rate'],
+                                 securities=config['Market']['Securities'])
         
         elif market_type == "call":
             self.market = CallMarket(self,
-                                interest_rate=config['Market']['Structure']['interest_rate'],
-                                interest_period=config['Market']['Structure']['interest_period'],
-                                clear_period=config['Market']['Structure']['clear_period'],
-                                transaction_rate=config['Market']['Structure']['transaction_rate'],
-                                securities=config['Market']['Securities'])
+                                     interest_rate=config['Market']['Structure']['interest_rate'],
+                                     interest_period=config['Market']['Structure']['interest_period'],
+                                     clear_period=config['Market']['Structure']['clear_period'],
+                                     transaction_rate=config['Market']['Structure']['transaction_rate'],
+                                     securities=config['Market']['Securities'])
 
 
     def run(self, num_simulation=100, num_of_timesteps=100000, random_seed=9527):
@@ -74,6 +76,7 @@ class Core:
         self.agent_manager.step()
         self.handle_messages()
         self.market.step()
+        self.handle_messages()
         self.timestep += 1
 
         if self.show_price:
@@ -82,6 +85,17 @@ class Core:
             if self.timestep % 100 == 0:
                 print(f"==========={self.timestep}===========\n")
 
+    def env_start(self, random_seed):
+        self.start_time = datetime.now()
+        self.random_seed = random_seed
+        self.market.start()
+        self.agent_manager.start(self.market.get_securities())
+
+        self.timestep = 0
+        self.market.open_session()
+        self.agent_manager.add_rl_agent(self.config['Env']['agent'])
+
+        
     def env_step(self, action, rl_agent_id):
         self.agent_manager.env_step(action, rl_agent_id)
         self.handle_messages()
@@ -92,6 +106,51 @@ class Core:
         #     print(f"==========={self.timestep}===========\n")
 
     def env_close(self):
+        return self.market.orderbooks, self.agent_manager
+
+    def parallel_env_start(self, random_seed, group_name):
+        self.start_time = datetime.now()
+        self.random_seed = random_seed
+        self.market.start()
+        self.agent_manager.start(self.market.get_securities())
+        pr_agent_ids = list(self.agent_manager.agents.keys())
+        self.timestep = 0
+        self.market.open_session()
+
+        return pr_agent_ids
+
+
+    def parallel_env_step(self, actions):
+        self.agent_manager.multi_env_step(actions)
+        self.handle_messages()
+        self.market.step()
+        self.timestep += 1
+        # print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
+        # if self.timestep % 100 == 0:
+        #     print(f"==========={self.timestep}===========\n")
+
+    def parallel_env_close(self):
+        return self.market.orderbooks, self.agent_manager
+
+    def multi_env_start(self, random_seed, group_name):
+        self.start_time = datetime.now()
+        self.random_seed = random_seed
+        self.market.start()
+        self.agent_manager.start(self.market.get_securities())
+        agent_ids = list(self.agent_manager.group_agent[group_name])
+        self.timestep = 0
+        self.market.open_session()
+
+        return agent_ids
+
+
+    def multi_env_step(self, actions):
+        self.agent_manager.multi_env_step(actions)
+        self.handle_messages()
+        self.market.step()
+        self.timestep += 1
+
+    def multi_env_close(self):
         return self.market.orderbooks, self.agent_manager
 
 
@@ -157,9 +216,6 @@ class Core:
     def get_stock_size(self):
         return self.market.stock_size
 
-    def get_price_info(self, code):
-        return self.market.get_price_info(code)
-
     def get_value(self, code):
         return self.market.get_value(code)
     
@@ -172,11 +228,14 @@ class Core:
                  'asks': self.get_best_asks(code='TSMC', number = best_price),}
         return state
 
-    def get_parallel_env_state(self, lookback, best_price):
-        state = {'average': self.get_records(code='TSMC', _type = 'average', step = lookback),
-                 'close': self.get_records(code='TSMC', _type = 'close', step = lookback),
+    def get_parallel_env_state(self, lookback):
+        state = {'price': self.get_records(code='TSMC', _type = 'price', step = lookback),
                  'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback),
-                 'highest': self.get_records(code='TSMC', _type = 'highest', step = lookback),
-                 'lowest': self.get_records(code='TSMC', _type = 'lowest', step = lookback),
         }
         return state
+
+    def get_base_price(self, code):
+        return self.market.get_base_price(code)
+
+    def get_base_volume(self, code):
+        return self.market.get_base_volume(code)

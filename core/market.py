@@ -164,10 +164,10 @@ class Market:
         for code, orderbook in self.orderbooks.items():
             volume = orderbook.steps_record['volume'][-1]
             amount = orderbook.steps_record['amount'][-1]
-            close_price = orderbook.steps_record['close'][-1]
+            price = orderbook.steps_record['close'][-1]
             bid = orderbook.bids_sum
             ask = orderbook.asks_sum
-            stats[code] = {'close price': close_price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
+            stats[code] = {'price': price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
         return stats
 
     def determine_tick_size(self, base_price):
@@ -197,18 +197,37 @@ class CallMarket(Market):
 
     def step(self):
         for orderbook in self.orderbooks.values():
-            match_price, max_match_volume = orderbook.match_order()
-            orderbook.fill_orders(match_price, max_match_volume)
-            orderbook.clear_orders()
-            orderbook.step_summarize()
+            if len(orderbook.bids_price) == 0 or len(orderbook.asks_price) == 0:
+                print("No quote")
+            elif orderbook.bids_price[0] < orderbook.asks_price[0]:
+                print("No match")
+            else:
+                match_price, max_match_volume = orderbook.match_order()
+                orderbook.fill_orders(match_price, max_match_volume)
+                orderbook.clear_orders()
+                orderbook.step_summarize()
             
-
-        # self.check_volatility()
-        # self.check_liquidity()
 
         if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
             # adjust value
             
+    def market_stats(self):
+        stats = {}
+        for code, orderbook in self.orderbooks.items():
+            volume = orderbook.steps_record['volume'][-1]
+            amount = orderbook.steps_record['amount'][-1]
+            price = orderbook.steps_record['price'][-1]
+            bid = orderbook.steps_record['bid'][-1]
+            ask = orderbook.steps_record['ask'][-1]
+            stats[code] = {'price': price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
+        return stats
+
     def get_current_price(self, code):
         return self.orderbooks[code].current_record['price']
+
+    def get_base_price(self, code):
+        return self.orderbooks[code].steps_record['price'][0]
+
+    def get_base_volume(self, code):
+        return self.orderbooks[code].steps_record['volume'][0]

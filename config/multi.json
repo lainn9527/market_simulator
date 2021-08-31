@@ -7,16 +7,14 @@
     "Market":{
         "Structure": {
             "interest_rate": 0.01,
-            "interest_period": 300,
-            "clear_period": 1,
+            "interest_period": 400,
+            "clear_period": 200,
             "transaction_rate": 0.002,
             "order_capacity": 50
         },
         "Securities": {
             "TSMC": {
-                "price": [],
-                "volume": [],
-                "value": [],
+                "value": 100,
                 "dividend_ratio": 0.1,
                 "dividend_ar": 0.95,
                 "dividend_var": 0.0743,
@@ -35,6 +33,20 @@
                 "TSMC": 2
             }
         },
+        "RLAgent": [
+            {
+                "name": "rl",
+                "number": 100,
+                "cash": 10000,
+                "securities": {
+                    "TSMC": 1
+                },
+                "obs": {
+                    "lookback": 10
+                }
+        
+            }
+        ],
         "ParallelAgent": [
             {
                 "name": "pr",
@@ -42,20 +54,14 @@
                 "bid_side": 0.5,
                 "range_of_price": 10,
                 "range_of_quantity": 5,
-                "cash": 30000,
+                "cash": 10000,
                 "securities": {
-                    "TSMC": 3
+                    "TSMC": 1
                 }
             }
         ]
     },
 
     "Env":{
-        "obs": {
-            "lookback": 10
-        }
-    },
-    "Train": {
-        
     }
 }

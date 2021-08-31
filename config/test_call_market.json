@@ -32,7 +32,7 @@
             "risk_preference_mean": 0,
             "risk_preference_var": 1,
             "securities": {
-                "TSMC": 5
+                "TSMC": 15
             }
         },
         "TestAgent": [

@@ -857,7 +857,7 @@ class DahooAgent(Agent):
 class ParallelAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5, risk_preference = 1):
         super().__init__(_id = _id, 
                          _type = 'pr',
                          start_cash = start_cash,
@@ -870,41 +870,47 @@ class ParallelAgent(Agent):
         self.range_of_price = range_of_price
         self.bid_side = bid_side
 
+    # def step(self, action = None):
+    #     super().step()
+    #     if isinstance(action, type(None)):
+    #         return
+
+    #     bid_or_ask = action[0]
+    #     ticks = action[1]
+    #     volume = action[2] + 1
+    #     current_price = self.core.get_current_price('TSMC')
+    #     tick_size = self.core.get_tick_size('TSMC')
+
+    #     if bid_or_ask == 2:
+    #         self.action_status = RLAgent.HOLD
+    #         return
+    #     elif bid_or_ask == 0:
+    #         # bid
+    #         self.action_status = RLAgent.INVALID_ACTION
+    #         best_bid = self.core.get_best_bids('TSMC', 1)
+    #         best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
+    #         price = round(best_bid + (4-ticks) * tick_size, 2)
+    #         self.place_limit_bid_order('TSMC', volume, price)
+
+    #     elif bid_or_ask == 1:
+    #         # ask
+    #         self.action_status = RLAgent.INVALID_ACTION
+    #         best_ask = self.core.get_best_asks('TSMC', 1)
+    #         best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
+    #         price = round(best_ask + (ticks-4) * tick_size, 2)
+    #         self.place_limit_ask_order('TSMC', volume, price)
+
+    # def receive_message(self, message):
+    #     super().receive_message(message)
+    #     if message.subject == 'ORDER_PLACED':
+    #         self.action_status = RLAgent.VALID_ACTION
+
     def step(self):
         super().step()
         # to trade?
         # if np.random.binomial(n = 1, p = 0.1) == 1:
-        self.provide_volatility()
+        self.generate_order()
 
-    def provide_liquidity(self):
-        code = np.random.choice(list(self.holdings.keys()))
-        current_price = self.core.get_current_price(code)
-        quantity = np.random.randint(1, self.range_of_quantity)
-        tick_size = self.core.get_tick_size(code)
-
-        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
-            best_bid = self.core.get_best_asks(code, 1)
-            best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
-            price = round(best_bid - np.random.randint(0, self.range_of_price) * tick_size , 2)
-            self.place_limit_bid_order(code, quantity, price)
-        else:
-            # ask
-            best_ask = self.core.get_best_bids(code, 1)
-            best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
-            price = round(best_ask + np.random.randint(0, self.range_of_price) * tick_size, 2)
-            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
-
-    def provide_volatility(self):
-        # which one?
-        code = np.random.choice(list(self.holdings.keys()))
-        current_price = self.core.get_current_price(code)
-        quantity = np.random.randint(1, self.range_of_quantity)
-        tick_size = self.core.get_tick_size(code)
-        price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price) * tick_size , 2)
-        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
-            self.place_limit_bid_order(code, quantity, price)
-        else:
-            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
 
     def generate_order(self):
         # which one?
@@ -912,18 +918,10 @@ class ParallelAgent(Agent):
         current_price = self.core.get_current_price(code)
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
-
+        price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price+1) * tick_size , 2)
         if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
-            # bid
-            best_bid = self.core.get_best_bids(code, 1)
-            best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
-            price = round(best_bid - np.random.randint(0, self.range_of_price) * tick_size , 2)
             self.place_limit_bid_order(code, quantity, price)
         else:
-            # ask
-            best_ask = self.core.get_best_asks(code, 1)
-            best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
-            price = round(best_ask + np.random.randint(0, self.range_of_price) * tick_size, 2)
             self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
 
 
@@ -975,9 +973,13 @@ class TestAgent(Agent):
     def step(self):
         super().step()
         # to trade?
-        if len(self.order_list) != 0 and self.order_list[0]['time'] == self.get_time():
-            order = self.order_list.pop(0)
-            if order['bid_or_ask'] == 'BID':
-                self.place_limit_bid_order(order['code'], order['quantity'], order['price'])
+        i = 0
+        while i < len(self.order_list):
+            if self.order_list[i]['time'] == self.get_time():
+                order = self.order_list.pop(i)
+                if order['bid_or_ask'] == 'BID':
+                    self.place_limit_bid_order(order['code'], order['quantity'], order['price'])
+                else:
+                    self.place_limit_ask_order(order['code'], order['quantity'], order['price'])
             else:
-                self.place_limit_ask_order(order['code'], order['quantity'], order['price'])
+                i += 1

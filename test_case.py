@@ -1,6 +1,7 @@
 import argparse
 import numpy as np
 import json
+import random
 from pathlib import Path
 from datetime import datetime, timedelta
 from core.core import Core
@@ -270,38 +271,46 @@ class TestCase:
         assert ask_hedge_agent.holdings['TSMC'] == ask_hedge_final_holding
 
     def test_call_market(self):
-        config_path = Path("config/test_call_market.json.json")
+        config_path = Path("config/test_call_market.json")
         config = json.loads(config_path.read_text())
         cash = config['Agent']['Global']['cash']
         holdings = config['Agent']['Global']['securities']['TSMC']
         transaction_rate = config['Market']['Structure']['transaction_rate']
+        config['Market']['Securities']['TSMC']['price'] = [random.gauss(100, 10) for i in range(100)]
+        config['Market']['Securities']['TSMC']['volume'] = [int(random.gauss(100, 10)*10) for i in range(100)]
+        config['Market']['Securities']['TSMC']['value'] = [random.gauss(100, 10) for i in range(100)]
+
 
         bid_agent_name = f"{config['Agent']['TestAgent'][0]['name']}_1"
         bid_agent_order_list = [{'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 9, 'quantity': 2, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 10, 'quantity': 2, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 11, 'quantity': 2, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 9, 'quantity': 2, 'time': 1},
                                 {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 10, 'quantity': 2, 'time': 1},
-                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 11, 'quantity': 2, 'time': 2},]
-
+                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 11, 'quantity': 2, 'time': 1},]
         time = len(bid_agent_order_list)
         config['Agent']['TestAgent'][0]['order_list'] = bid_agent_order_list
-        bid_agent_final_cash = round(cash - 4 * 2 * 100 * (1+transaction_rate) + 8 * 2 * 100 * (1-transaction_rate), 2)
-        bid_agent_final_holding = holdings - 5
+        bid_agent_final_cash = round(cash - 9 * 10 * 100 * (1+transaction_rate), 2)
+        bid_agent_final_holding = holdings + 10
         # The first two bid orders will be cancelled
         # So the final cash is ( origin - 4 * 2 * 100 * (1+0.002) ) and the final holdings is ( origin - 5)
 
         ask_agent_name = f"{config['Agent']['TestAgent'][1]['name']}_1"
-        ask_agent_order_list = [{'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 7, 'quantity': 5, 'time': 4},
-                                {'code': 'TSMC', 'bid_or_ask': 'BID', 'price': 12, 'quantity': 2, 'time': 5},]
+        ask_agent_order_list = [{'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 7, 'quantity': 5, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 12, 'quantity': 2, 'time': 0},
+                                {'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 7, 'quantity': 5, 'time': 1},
+                                {'code': 'TSMC', 'bid_or_ask': 'ASK', 'price': 12, 'quantity': 2, 'time': 1}]
 
         config['Agent']['TestAgent'][1]['order_list'] = ask_agent_order_list
-        ask_agent_final_cash = round(cash - 8 * 2 * 100 * (1+transaction_rate), 2)
-        ask_agent_final_holding = holdings + 2
+        ask_agent_final_cash = round(cash + 9 * 10 * 100 * (1-transaction_rate), 2)
+        ask_agent_final_holding = holdings - 10
 
         # The only transaction is ask 1 at price 8. The order remain is bid 1 at price 13
         # So the final cash is ( origin + 8 * 1 * 100 * (1-0.002) - 13 * 1 * 100 * (1+0.002) ) and the final holding is ( origin - 1)
 
 
-        core = Core(config)
-        orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = 8)
+        core = Core(config, market_type="call")
+        orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = 3)
         tsmc: OrderBook = orderbooks['TSMC']
 
         bid_agent_id = agent_manager.group_agent[bid_agent_name][0]
@@ -316,7 +325,7 @@ class TestCase:
         # filled_amount = filled_price * filled_quantity * 100
 
         assert round(bid_agent.cash, 2) == bid_agent_final_cash
-        assert bid_agent.holdings['TSMC'] == bid_agent_final_cash
+        assert bid_agent.holdings['TSMC'] == bid_agent_final_holding
 
         assert round(ask_agent.cash, 2) == ask_agent_final_cash
         assert ask_agent.holdings['TSMC'] == ask_agent_final_holding
@@ -326,4 +335,4 @@ class TestCase:
 
 if __name__ == '__main__':
     testcase = TestCase()
-    testcase.test_hedge_order()
+    testcase.test_call_market()

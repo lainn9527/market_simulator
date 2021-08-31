@@ -27,6 +27,8 @@ class FeatureExtractor(BaseFeaturesExtractor):
             'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
         })
         '''
+
+
         extractors['orderbook'] = nn.GRU(input_size = observation_space.spaces['orderbook'].shape[0],
                                           num_layers = 1,
                                           hidden_size = 2,
@@ -58,71 +60,31 @@ class FeatureExtractor(BaseFeaturesExtractor):
                 encoded_tensor_list.append(output[:, -1, :])
         return th.cat(encoded_tensor_list, dim=1)
 
-class CustomNetwork(nn.Module):
-    """
-    Custom network for policy and value function.
-    It receives as input the features extracted by the feature extractor.
+class ParallelFeatureExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Dict):
+        # We do not know features-dim here before going over all the items,
+        # so put something dummy for now. PyTorch requires calling
+        # nn.Module.__init__ before adding modules
+        super(ParallelFeatureExtractor, self).__init__(observation_space, features_dim=1)
 
-    :param feature_dim: dimension of the features extracted with the features_extractor (e.g. features from a CNN)
-    :param last_layer_dim_pi: (int) number of units for the last layer of the policy network
-    :param last_layer_dim_vf: (int) number of units for the last layer of the value network
-    """
+        extractors = {}
 
-    def __init__(
-        self,
-        feature_dim: int,
-        last_layer_dim_pi: int = 64,
-        last_layer_dim_vf: int = 64,
-    ):
-        super(CustomNetwork, self).__init__()
-
-        # IMPORTANT:
-        # Save output dimensions, used to create the distributions
-        self.latent_dim_pi = last_layer_dim_pi
-        self.latent_dim_vf = last_layer_dim_vf
-
-        # Policy network
-        self.policy_net = nn.Sequential(
-            nn.Linear(feature_dim, last_layer_dim_pi), nn.ReLU()
-        )
-        # Value network
-        self.value_net = nn.Sequential(
-            nn.Linear(feature_dim, last_layer_dim_vf), nn.ReLU()
-        )
-
-    def forward(self, features: th.Tensor) -> Tuple[th.Tensor, th.Tensor]:
-        """
-        :return: (th.Tensor, th.Tensor) latent_policy, latent_value of the specified network.
-            If all layers are shared, then ``latent_policy == latent_value``
-        """
-        return self.policy_net(features), self.value_net(features)
+        total_concat_size = 0
+        # We need to know size of the output of this extractor,
+        # so go over all the spaces and compute output feature sizes
+        '''
+        spaces.Dict({
+            'orderbook': spaces.Box(low = 0, high = 1000, shape=(2, self.config['obs']['best_price'], )),
+            'price': spaces.Box(low = 0, high = 2000, shape=(5, self.config['obs']['lookback'],)),
+            'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
+        })
+        '''
 
 
-class CustomActorCriticPolicy(ActorCriticPolicy):
-    def __init__(
-        self,
-        observation_space: gym.spaces.Space,
-        action_space: gym.spaces.Space,
-        lr_schedule: Callable[[float], float],
-        net_arch: Optional[List[Union[int, Dict[str, List[int]]]]] = None,
-        activation_fn: Type[nn.Module] = nn.Tanh,
-        *args,
-        **kwargs,
-    ):
+        self.extractors = nn.Sequential(nn.Linear(in_features = observation_space.shape[0], out_features = 8),
+                                        nn.Linear(in_features = 8, out_features = 2),)
+        self._features_dim = 2
 
-        super(CustomActorCriticPolicy, self).__init__(
-            observation_space,
-            action_space,
-            lr_schedule,
-            net_arch,
-            activation_fn,
-            # Pass remaining arguments to base class
-            *args,
-            **kwargs,
-        )
-        # Disable orthogonal initialization
-        self.ortho_init = False
-
-    def _build_mlp_extractor(self) -> None:
-        self.mlp_extractor = CustomNetwork(self.features_dim)
-
+    def forward(self, observations) -> th.Tensor:
+        
+        return self.extractors(observations)

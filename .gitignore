@@ -6,6 +6,7 @@ __pycache__/*
 model/*
 result/*
 rl_result/
+simulation_result
 .vscode
 *.code-workspace
 tmp.py

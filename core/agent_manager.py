@@ -3,6 +3,7 @@ from typing import Dict, List
 from collections import defaultdict
 from core import agent
 from queue import Queue
+
 class AgentManager:
     def __init__(self, core, config: Dict):
         self.config = config
@@ -38,10 +39,11 @@ class AgentManager:
             random.shuffle(agent_ids)
             for agent_id in agent_ids:
                 self.agent_queue.put(agent_id)
+
         while not self.core.queue_full() and not self.agent_queue.empty():
             agent_id = self.agent_queue.get()
             self.agents[agent_id].step()
-        self.update_record() 
+        self.update_record()
 
     def env_step(self, action, rl_agent_id):
         agent_ids = list(self.agents.keys())
@@ -53,6 +55,22 @@ class AgentManager:
                 self.agents[agent_id].step()
         self.update_record()
 
+    def parallel_env_step(self, actions):
+        agent_ids = list(actions.keys())
+        random.shuffle(agent_ids)
+        for agent_id in agent_ids:
+            self.agents[agent_id].step(actions[agent_id])
+
+    def multi_env_step(self, actions, group_name = 'rl'):
+        agent_ids = list(self.agents.keys())
+        random.shuffle(agent_ids)
+        for agent_id in agent_ids:
+            if agent_id.startswith(group_name):
+                self.agents[agent_id].step(actions[agent_id])
+            else:
+                self.agents[agent_id].step()
+        self.update_record()
+            
     def receive_message(self, message):
         if message.postcode == 'AGENT':
             self.agents[message.receiver].receive_message(message)
@@ -123,7 +141,6 @@ class AgentManager:
                     self.group_agent[group_name].append(agent.unique_id)
                 
                 self.initial_state[group_name] = {'cash': agent_cash, 'security': agent_holdings}
-                    
 
     def add_rl_agent(self, config):
         rl_agent = agent.RLAgent(start_cash = config['cash'], start_securities = config['securities'], _id = config['id'])
@@ -132,6 +149,16 @@ class AgentManager:
         self.agents[rl_agent.unique_id] = rl_agent
         self.group_agent[config['name']] = [rl_agent.unique_id]
 
+    def add_rl_agents(self, config):
+        pass
+
+
+    def build_rl_agent(self, config):
+        new_agent = agent.RLAgent(_id = config['_id'],
+                                  start_cash = config['cash'],
+                                  start_securities = config['securities'],)
+        
+        return new_agent
 
     def build_zi_agent(self, config):
         new_agent = agent.ZeroIntelligenceAgent(_id = config['_id'],
@@ -189,8 +216,7 @@ class AgentManager:
                                      start_securities = config['securities'],
                                      securities_value = securities_vale)
         return new_agent
-    def build_rl_agent(self):
-        pass
+
 
     def build_te_agent(self, config):
         securities = self.global_config['securities'].copy()
@@ -200,11 +226,13 @@ class AgentManager:
                                     order_list = config['order_list'])
         return new_agent
 
+
     def build_pr_agent(self, config):
         new_agent = agent.ParallelAgent(_id = config['_id'],
-                                        start_cash = config['cash'],
+                                        start_cash = config['cash'], 
                                         start_securities = config['securities'],
-                                        bid_side = config['bid_side'],
+                                        average_cost= config['average_cost'],
+                                        risk_preference = config['risk_preference'],
                                         range_of_price = config['range_of_price'],
                                         range_of_quantity = config['range_of_quantity'])
         return new_agent
@@ -228,5 +256,7 @@ class AgentManager:
             return "dh"
         elif _type == "ParallelAgent":
             return "pr"
+        elif _type == "RLAgent":
+            return "rl"
         else:
             raise Exception(f"No {_type} agent")
