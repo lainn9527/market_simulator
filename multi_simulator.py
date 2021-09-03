@@ -10,7 +10,7 @@ from typing import Dict
 from pathlib import Path
 from torch.optim import Adam
 
-from env.utils import write_rl_records
+from core.utils import write_multi_records
 from env.multi_env import MultiTradingEnv
 from env.actor_critic import ActorCritic
 
@@ -34,7 +34,7 @@ def train_model(train_config: Dict, env_config: Dict):
     device = torch.device(train_config['device'])
 
 
-    train_env = MultiTradingEnv(env_config)
+    train_env =  MultiTradingEnv(env_config)
     look_backs = [random.randint(10, 20) for i in range(num_rl_agent)]
     action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
     agent_ids, observation_spaces, states = train_env.reset(look_backs)
@@ -49,7 +49,8 @@ def train_model(train_config: Dict, env_config: Dict):
     '''
     make this shit run
     '''
-
+    
+    history = {key: [] for key in ['orderbooks', 'agent_managers', 'states']}
     for t in range(n_epochs):
         for i in range(n_steps):
             for agent_id, agent in agents.items():
@@ -69,8 +70,8 @@ def train_model(train_config: Dict, env_config: Dict):
                     agent.clear_memory()
             
             train_env.render()
-        orderbooks, agent_manager, states = train_env.close()
-        write_rl_records(orderbooks, agent_manager, states)
+        history['orderbooks'], history['agent_manager'], history['states'] = train_env.close()
+    write_multi_records(history, train_output_dir)
     
     
 
@@ -91,16 +92,15 @@ def test(env_config, model, n_steps, output_dir):
 
     # metric: wealth, valid action, reward, order placement, turnover rate
 
-    write_rl_records(orderbooks, agent_manager, states, output_dir)
 
 if __name__=='__main__':
     training_cofig = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/te/"),
+        'result_dir': Path("simulation_result/multi/test/"),
         'resume': False,
         'resume_model_dir': Path("rl_result/noir_10300/model.zip"),
         'train': True,
-        'n_steps': 18000,
+        'n_steps': 32,
         'n_epochs': 1,
         'batch_size': 64,
         'test': False,

@@ -79,8 +79,34 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
 
     
     
+def write_multi_records(infos: Dict, output_dir: Path):
+    output_dir.mkdir(exist_ok = True)
+    length = len(infos['orderbooks'])
+    for i in range(length):
+        output_dir = output_dir / f'sim_{i+1}'
+        output_dir.mkdir(exist_ok = True)
+        write_records(infos['orderbooks'], infos['agent_manager'], output_dir)
+
+    agent_states = infos['states']
+    agent_states
+    # rl_id = "RL"
+    # rl_agent = agent_manager.agents[rl_id]
+    # order_ids = rl_agent.orders['TSMC'] + rl_agent.orders_history['TSMC']
+
+    # # output the order of rl agent
+    # agent_orders = []
+    # for order_id in order_ids:
+    #     order_record = orderbooks['TSMC'].orders[order_id]
+    #     order = order_record.order
+    #     agent_orders.append({'time': int(order_record.placed_time), 'bid_or_ask': str(order.bid_or_ask), 'price': float(order.price), 'volume': int(order.quantity)})
+    #     # order_price = order.price
+    #     # state = states[order_record.placed_time]
+    #     # close_price = state['price']['close']
+    #     # slippage = close_price - order_price
+
+    # file_path = output_dir / "rl.json"
 
 
-    
-
-    
+    # with open(file_path, 'w') as fp:
+    #     json.dump({'orders' :agent_orders, 'states': states}, fp, indent=4)
+        
