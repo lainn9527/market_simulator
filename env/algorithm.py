@@ -5,12 +5,12 @@ from torch import distributions
 from torch.distributions import Categorical
 
 class ActorCritic(nn.Module):
-    def __init__(self, obs_size, action_shape):
+    def __init__(self, observation_space, action_space):
         super(ActorCritic, self).__init__()
-        self.action_shape = action_shape
-        total_action_size = sum(action_shape)
+        self.action_space = action_space
+        total_action_size = sum(action_space)
 
-        self.affine = nn.Linear(obs_size, 32)
+        self.affine = nn.Linear(observation_space, 32)
         self.action_layer = nn.Linear(32, total_action_size)
         self.value_layer = nn.Linear(32, 1)
         
@@ -22,7 +22,7 @@ class ActorCritic(nn.Module):
         state = F.relu(self.affine(state))
         state_value = self.value_layer(state)
         
-        logits = self.action_layer(state).split(self.action_shape)
+        logits = self.action_layer(state).split(self.action_space)
         probs = [F.softmax(logit) for logit in logits]
         dists = [Categorical(prob) for prob in probs]
         actions = [dist.sample() for dist in dists]

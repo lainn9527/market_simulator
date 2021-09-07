@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from queue import Queue
 from typing import Dict, List
 from gym.utils import seeding
+from numpy.lib.function_base import angle
 
 # from core import agent
 from .market import Market, CallMarket
@@ -137,6 +138,7 @@ class Core:
         self.random_seed = random_seed
         self.market.start()
         self.agent_manager.start(self.market.get_securities())
+        
         agent_ids = list(self.agent_manager.group_agent[group_name])
         self.timestep = 0
         self.market.open_session()
@@ -153,6 +155,8 @@ class Core:
     def multi_env_close(self):
         return self.market.orderbooks, self.agent_manager
 
+    def show_market_state(self):
+        return self.market.market_stats()
 
     def send_message(self, message):
         # add message to queue
@@ -233,6 +237,9 @@ class Core:
                  'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback),
         }
         return state
+    
+    def get_rl_agent_status(self, agent_id):
+        return self.agent_manager.agents[agent_id].action_status
 
     def get_base_price(self, code):
         return self.market.get_base_price(code)

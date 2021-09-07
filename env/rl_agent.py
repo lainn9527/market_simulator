@@ -1,90 +1,126 @@
-
-import gym
-import torch as th
-from torch import nn
-from stable_baselines3 import PPO
-from stable_baselines3.common.policies import ActorCriticPolicy
-from typing import Callable, Dict, List, Optional, Tuple, Type, Union
-
-from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-
-class FeatureExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict):
-        # We do not know features-dim here before going over all the items,
-        # so put something dummy for now. PyTorch requires calling
-        # nn.Module.__init__ before adding modules
-        super(FeatureExtractor, self).__init__(observation_space, features_dim=1)
-
-        extractors = {}
-
-        total_concat_size = 0
-        # We need to know size of the output of this extractor,
-        # so go over all the spaces and compute output feature sizes
-        '''
-        spaces.Dict({
-            'orderbook': spaces.Box(low = 0, high = 1000, shape=(2, self.config['obs']['best_price'], )),
-            'price': spaces.Box(low = 0, high = 2000, shape=(5, self.config['obs']['lookback'],)),
-            'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
-        })
-        '''
+import torch
+import numpy as np
+from .algorithm import ActorCritic
 
 
-        extractors['orderbook'] = nn.GRU(input_size = observation_space.spaces['orderbook'].shape[0],
-                                          num_layers = 1,
-                                          hidden_size = 2,
-                                          batch_first = True)
+class BaseAgent:
+    '''
+    Design of agent
 
-        extractors['price'] = nn.GRU(input_size = observation_space.spaces['price'].shape[0],
-                                     num_layers = 2,
-                                     hidden_size = 8,
-                                     batch_first = True)
+    Observation Sapce
+    - market
+        - price
+        - volume
 
-        extractors['agent'] = nn.Linear(in_features = observation_space.spaces['agent'].shape[0],
-                                        out_features = 1)
-
-        total_concat_size = 2 + 8 + 1
-
-        self.extractors = nn.ModuleDict(extractors)
-        self._features_dim = total_concat_size
-
-    def forward(self, observations) -> th.Tensor:
-        encoded_tensor_list = []
-        # self.extractors contain nn.Modules that do all the processing.
-        for key, extractor in self.extractors.items():
-            if key == 'agent':
-                encoded_tensor_list.append(extractor(observations[key]))
-            else:
-                # input size: (batch, feature, seq_len) to (batch, seq_len, feature) by transpose
-                output, _ = extractor(observations[key].transpose(1, 2))
-                # output size: (batch, seq_len, hidden_size), extract the last sequence output
-                encoded_tensor_list.append(output[:, -1, :])
-        return th.cat(encoded_tensor_list, dim=1)
-
-class ParallelFeatureExtractor(BaseFeaturesExtractor):
-    def __init__(self, observation_space: gym.spaces.Dict):
-        # We do not know features-dim here before going over all the items,
-        # so put something dummy for now. PyTorch requires calling
-        # nn.Module.__init__ before adding modules
-        super(ParallelFeatureExtractor, self).__init__(observation_space, features_dim=1)
-
-        extractors = {}
-
-        total_concat_size = 0
-        # We need to know size of the output of this extractor,
-        # so go over all the spaces and compute output feature sizes
-        '''
-        spaces.Dict({
-            'orderbook': spaces.Box(low = 0, high = 1000, shape=(2, self.config['obs']['best_price'], )),
-            'price': spaces.Box(low = 0, high = 2000, shape=(5, self.config['obs']['lookback'],)),
-            'agent': spaces.Box(low = 0, high = 100000000, shape=(2,))
-        })
-        '''
+    - agent state
+        - cash
+        - holdings
+        - wealth
 
 
-        self.extractors = nn.Sequential(nn.Linear(in_features = observation_space.shape[0], out_features = 8),
-                                        nn.Linear(in_features = 8, out_features = 2),)
-        self._features_dim = 2
+    Action Space
+    - Discrete 3 - BUY[0], SELL[1], HOLD[2]
+    - Discrete 9 - TICK_-4[0], TICK_-3[1], TICK_-2[2], TICK_-1[3], TICK_0[4], TICK_1[5], TICK_2[6], TICK_3[7], TICK_4[8]
+    - Discrete 5 - VOLUME_1[0], VOLUME_2[1], VOLUME_3[2], VOLUME_4[3], VOLUME_5[4],
 
-    def forward(self, observations) -> th.Tensor:
+    Reward:
+    - action
+        - if holdings <= 0 & sell, -0.2
+        - if cash < price*100 & buy, -0.2
+        - if hold, -0.02
+        - if right action, +0.3
         
-        return self.extractors(observations)
+    - wealth
+        - short: present wealth v.s. last step wealth, % * 0.15
+        - mid: present wealth v.s. average of last 50 step wealth, % * 0.3
+        - long: present wealth v.s. average of last 200 step wealth, % * 0.35
+        - origin: present wealth v.s. original wealth, % * 0.2
+    '''    
+
+    def __init__(self, observation_space, action_space, device, look_back):
+        self.rl = ActorCritic(observation_space, action_space).to(device)
+        self.states = []
+        self.device = device
+        self.look_back = look_back
+
+    def forward(self, state):
+
+        self.states.append(state)
+
+        obs = self.obs_wrapper(state)
+        obs = torch.from_numpy(obs).to(self.device)
+        action = self.rl.forward(obs)
+        return action
+
+    def calculate_loss(self):
+        loss = self.rl.calculate_loss()
+        self.rl.clear_memory()
+        return loss
+
+
+    def calculate_reward(self, action, next_state, action_status):
+        reward = self.reward_wrapper(action, next_state, action_status)
+        total_reward = sum(reward)
+        self.rl.rewards.append(total_reward)
+        return reward
+
+
+    def get_parameters(self):
+        return self.rl.parameters()
+
+    def obs_wrapper(self, obs):
+        price = np.array( [value for value in obs['market']['price']], dtype=np.float32)
+        volume = np.array( [value for value in obs['market']['volume']], dtype=np.float32)
+        agent_state = np.array( [value for key, value in obs['agent'].items() if key != 'wealth'], dtype=np.float32)
+        
+        # use base price to normalize
+        start_price = self.states[0]['market']['price'][0]
+        start_volume = self.states[0]['market']['volume'][0]
+        price = price / start_price
+        volume = volume / start_volume
+        price = price.flatten()
+        volume = volume.flatten()
+        agent_state[0] = agent_state[0] / (start_price*100)
+
+        # concat
+        return np.concatenate([price, volume, agent_state])
+
+    def reward_wrapper(self, action, next_state, action_status):
+        # action reward
+        is_valid = 1
+        action_reward = 0
+
+        if action[0] == 0 or action[0] == 1:
+            # VALID_ACTION = 1, INVALID_ACTION = 2, HOLD = 0
+            if action_status == 1:
+                action_reward += 0.3
+            elif action_status == 2:
+                action_reward -= 0.2
+                is_valid = 0
+            
+        elif action[0] == 2:
+            action_reward -= 0.02
+
+        # wealth reward
+        mid_steps = 50
+        long_steps = 200
+        wealth_weight = {'short': 0.15, 'mid': 0.35, 'long': 0.3, 'base': 0.2}
+        present_wealth = next_state['agent']['wealth']
+        base_wealth = self.states[0]['agent']['wealth']
+        last_wealth = self.states[-1]['agent']['wealth']
+        mid_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(mid_steps+1):-1]]
+        mid_wealth = sum(mid_wealths) / len(mid_wealths)
+        long_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(long_steps+1):-1]]
+        long_wealth = sum(long_wealths) / len(long_wealths)
+        
+        short_change = (present_wealth - last_wealth) / last_wealth
+        mid_change = (present_wealth - mid_wealth) / mid_wealth
+        long_change = (present_wealth - long_wealth) / long_wealth
+        base_change = (present_wealth - base_wealth) / base_wealth
+
+        wealth_reward = wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
+
+        return action_reward, wealth_reward, is_valid
+
+    def final_reward(self):
+        pass

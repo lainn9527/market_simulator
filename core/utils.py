@@ -79,16 +79,24 @@ def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Pat
 
     
     
-def write_multi_records(infos: Dict, output_dir: Path):
-    output_dir.mkdir(exist_ok = True)
-    length = len(infos['orderbooks'])
-    for i in range(length):
-        output_dir = output_dir / f'sim_{i+1}'
+def write_multi_records(infos: list, output_dir: Path):
+    for i, info in enumerate(infos):
         output_dir.mkdir(exist_ok = True)
-        write_records(infos['orderbooks'], infos['agent_manager'], output_dir)
-
-    agent_states = infos['states']
-    agent_states
+        sim_dir = output_dir / f'sim_{i+1}'
+        sim_dir.mkdir(exist_ok = True)
+        write_records(info['orderbooks'], info['agent_manager'], sim_dir)
+        
+        rl_states = info['states']
+        # remove the market states of agent
+        for agent_id, states in rl_states.items():
+            states['obs_size'] = len(states['states'][0])
+            for state in states['states']:
+                state.pop('market')
+        
+        file_path = sim_dir / "rl_agent.json"
+        with open(file_path, 'w') as fp:
+            json.dump(rl_states, fp, indent=4)
+        
     # rl_id = "RL"
     # rl_agent = agent_manager.agents[rl_id]
     # order_ids = rl_agent.orders['TSMC'] + rl_agent.orders_history['TSMC']

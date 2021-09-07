@@ -298,6 +298,7 @@ class RLAgent(Agent):
                          start_securities = start_securities,
                          average_cost = average_cost,
                          risk_preference = 1)
+
         RLAgent.add_counter()
         self.action_status = RLAgent.HOLD
     

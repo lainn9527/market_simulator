@@ -17,7 +17,7 @@ from core.market import Market
 from core.order import LimitOrder, MarketOrder
 from core.agent_manager import AgentManager
 from core.utils import write_records
-from .rl_agent import FeatureExtractor
+from .sb3_agent import FeatureExtractor
 
 class TradingEnv(gym.Env):
     # Because of google colab, we cannot implement the GUI ('human' render mode)

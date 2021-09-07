@@ -154,9 +154,10 @@ class AgentManager:
 
 
     def build_rl_agent(self, config):
+        num = agent.RLAgent.num_of_agent
         new_agent = agent.RLAgent(_id = config['_id'],
                                   start_cash = config['cash'],
-                                  start_securities = config['securities'],)
+                                  start_securities = config['securities'])
         
         return new_agent
 

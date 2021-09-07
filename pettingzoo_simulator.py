@@ -13,7 +13,7 @@ from stable_baselines3.common.monitor import Monitor
 from supersuit import pettingzoo_env_to_vec_env_v0, concat_vec_envs_v0
 
 from env.utils import write_rl_records
-from env.rl_agent import ParallelFeatureExtractor
+from env.sb3_agent import ParallelFeatureExtractor
 from env.parallel_trading_env import ParallelTradingEnv
 from env.utils import TrainingInfoCallback, evaluate
 

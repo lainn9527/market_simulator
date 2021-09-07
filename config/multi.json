@@ -42,7 +42,8 @@
                     "TSMC": 1
                 },
                 "obs": {
-                    "lookback": 10
+                    "min_look_back": 10,
+                    "max_look_back": 20
                 }
         
             }
