@@ -487,6 +487,9 @@ class CallOrderBook(OrderBook):
         self.steps_record['value'] = value
         self.steps_record['bid'] = []
         self.steps_record['ask'] = []
+        self.steps_record['bid_five_price'] = []
+        self.steps_record['ask_five_price'] = []
+        
     
     def set_price(self):
         self.tick_size = self.market.determine_tick_size(self.steps_record['price'][-1])
@@ -602,6 +605,8 @@ class CallOrderBook(OrderBook):
 
     def update_record(self, **name_val):
         self.current_record.update(name_val)
+        self.current_record['bid_five_price'] = {price: self.bids_volume[price] for price in self.bids_price[:5]}
+        self.current_record['ask_five_price'] = {price: self.asks_volume[price] for price in self.asks_price[:5]}
     
     def step_summarize(self):
         for key in self.steps_record.keys():

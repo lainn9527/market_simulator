@@ -23,7 +23,7 @@ class ActorCritic(nn.Module):
         state_value = self.value_layer(state)
         
         logits = self.action_layer(state).split(self.action_space)
-        probs = [F.softmax(logit) for logit in logits]
+        probs = [F.softmax(logit, dim = 0) for logit in logits]
         dists = [Categorical(prob) for prob in probs]
         actions = [dist.sample() for dist in dists]
         

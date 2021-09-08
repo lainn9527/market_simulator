@@ -36,7 +36,7 @@
         "RLAgent": [
             {
                 "name": "rl",
-                "number": 100,
+                "number": 1000,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1
@@ -46,19 +46,6 @@
                     "max_look_back": 20
                 }
         
-            }
-        ],
-        "ParallelAgent": [
-            {
-                "name": "pr",
-                "number": 300,
-                "bid_side": 0.5,
-                "range_of_price": 10,
-                "range_of_quantity": 5,
-                "cash": 10000,
-                "securities": {
-                    "TSMC": 1
-                }
             }
         ]
     },

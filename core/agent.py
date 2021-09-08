@@ -920,7 +920,7 @@ class ParallelAgent(Agent):
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
         price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price+1) * tick_size , 2)
-        if np.random.binomial(n = 1, p = self.bid_side) == 1 or self.holdings[code] == 0:
+        if np.random.binomial(n = 1, p = self.bid_side) == 1:
             self.place_limit_bid_order(code, quantity, price)
         else:
             self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
