@@ -1,20 +1,19 @@
 import random
 import numpy as np
 import json
-from numpy.lib.function_base import angle
 import torch
 import argparse
+from numpy.lib.function_base import angle
 
 from time import perf_counter
 from datetime import timedelta
-from typing import Dict, final
+from typing import Dict
 from pathlib import Path
 from torch.optim import Adam
 from copy import deepcopy
 
 from core.utils import write_multi_records
 from core.core import Core
-from env.multi_env import MultiTradingEnv
 from env.rl_agent import BaseAgent
 
 def train_model(train_config: Dict, env_config: Dict):
@@ -83,7 +82,6 @@ def train_model(train_config: Dict, env_config: Dict):
         return state
         
     # init training parameters
-    history = []
     rl_group_name = f"{env_config['Agent']['RLAgent'][0]['name']}_{env_config['Agent']['RLAgent'][0]['number']}"
 
     if train_config['train']:
@@ -105,7 +103,6 @@ def train_model(train_config: Dict, env_config: Dict):
             rl_optimizers = {agent_id: optimizers for agent_id, optimizers in zip(agent_ids, optimizers)}
             states = {agent_id: get_state(train_env, agent_id, rl_agents[agent_id].look_back) for agent_id in agent_ids}
             rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
-
             for i in range(n_steps):
                 actions = {agent_id: agent.forward(states[agent_id]) for agent_id, agent in rl_agents.items()}
                 train_env.multi_env_step(actions)
@@ -126,7 +123,8 @@ def train_model(train_config: Dict, env_config: Dict):
                     rl_records[agent_id]['rewards'].append(rewards[agent_id])
                 
                 states = next_states
-                print(f"At: {i}, the market state is:\n{train_env.show_market_state()}")
+                if i % 10 == 0:
+                    print(f"At: {i}, the market state is:\n{train_env.show_market_state()}")
             
             for agent_id, agent in rl_agents.items():
                 # final_reward = 0
@@ -139,15 +137,15 @@ def train_model(train_config: Dict, env_config: Dict):
 
 
             orderbooks, agent_manager = train_env.multi_env_close()
-            history.append({'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records})
-        
-        write_multi_records(history, train_output_dir)
-    
-        # store the agents
-        model_output_path = train_config['result_dir'] / 'model.pkl'
-        state_dicts = {f"base_{i}": agent.rl.state_dict() for i, agent in enumerate(agents)}
-        torch.save(state_dicts, model_output_path)
-        print(f"Training result is stored {train_output_dir}")
+            training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
+            write_multi_records(training_record, train_output_dir / f'sim_{t}')    
+            print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
+
+            # store the agents
+            model_output_path = train_config['result_dir'] / 'model.pkl'
+            state_dicts = {f"base_{i}": agent.rl.state_dict() for i, agent in enumerate(agents)}
+            torch.save(state_dicts, model_output_path)
+            print(f"The model is stored in {model_output_path}")
 
     else:
         print("Skip training")
@@ -187,13 +185,13 @@ def train_model(train_config: Dict, env_config: Dict):
                 del agent.states[:]
                 agent.rl.clear_memory()
 
-
+            f"validate_output_dir / sim_{i}"
             orderbooks, agent_manager = validate_env.multi_env_close()
-            history.append({'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records})
+            validate_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
+            write_multi_records(validate_record, validate_output_dir / f'sim_{t}')
+            print(f"Validation result is stored in {validate_output_dir / f'sim_{t}'}")
 
             
-        write_multi_records(history, validate_output_dir)
-        print(f"Validation result is stored {validate_output_dir}")
     else:
         print("Skip validating")
     print("End the simulation")
@@ -202,18 +200,18 @@ def train_model(train_config: Dict, env_config: Dict):
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/no_other_rl_1000/"),
-        'resume': False,
-        'resume_model_dir': Path("simulation_result/multi/test/"),
-        'train': True,
-        'train_steps': 3200,
-        'train_epochs': 12,
+        'result_dir': Path("simulation_result/multi/test/"),
+        'resume': True,
+        'resume_model_dir': Path("simulation_result/multi/no_other_rl_1000"),
+        'train': False,
+        'train_epochs': 8,
+        'train_steps': 2000,
         'batch_size': 64,
         'lr': 1e-4,
         'device': 'cuda',
         'validate': True,
-        'validate_epochs': 4,
-        'validate_steps': 3200,
+        'validate_epochs': 2,
+        'validate_steps': 2000,
     }
     # 4:30 h = 270min = 16200s
     if not model_config['result_dir'].exists():
