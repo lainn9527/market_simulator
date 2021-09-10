@@ -32,7 +32,17 @@ class ActorCritic(nn.Module):
         
         return [action.item() for action in actions]
     
-    
+    def predict(self, state):
+        state = F.relu(self.affine(state))
+        state_value = self.value_layer(state)
+        
+        logits = self.action_layer(state).split(self.action_space)
+        probs = [F.softmax(logit, dim = 0) for logit in logits]
+        actions = [probs[0].argmax() for prob in probs]
+        
+        
+        return [action.item() for action in actions]
+
     def calculate_loss(self, gamma=0.99):
         
         # calculating discounted rewards:

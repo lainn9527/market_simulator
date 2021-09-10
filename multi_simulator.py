@@ -59,9 +59,9 @@ def train_model(train_config: Dict, env_config: Dict):
 
     def init_env(config: Dict):
         config = deepcopy(config)
-        config['Market']['Securities']['TSMC']['price'] = [random.gauss(100, 1) for i in range(100)]
+        config['Market']['Securities']['TSMC']['price'] = [ round(random.gauss(100, 1), 1) for i in range(100)]
         config['Market']['Securities']['TSMC']['volume'] = [int(random.gauss(100, 10)*10) for i in range(100)]
-        config['Market']['Securities']['TSMC']['value'] = [random.gauss(100, 1) for i in range(100)]
+        config['Market']['Securities']['TSMC']['value'] = [round(random.gauss(100, 1), 1) for i in range(100)]
         return Core(config, market_type="call")
 
     def get_state(core, agent_id, look_back):
@@ -169,7 +169,7 @@ def train_model(train_config: Dict, env_config: Dict):
             rl_records = {agent_id: {'states': [], 'actions': []} for agent_id in agent_ids}
 
             for i in range(n_steps):
-                actions = {agent_id: agent.forward(states[agent_id]) for agent_id, agent in rl_agents.items()}
+                actions = {agent_id: agent.predict(states[agent_id]) for agent_id, agent in rl_agents.items()}
                 validate_env.multi_env_step(actions)
                 next_states = {agent_id: get_state(validate_env, agent_id, rl_agents[agent_id].look_back) for agent_id in agent_ids}
                 action_status = {agent_id: validate_env.get_rl_agent_status(agent_id) for agent_id in agent_ids}
@@ -200,7 +200,7 @@ def train_model(train_config: Dict, env_config: Dict):
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/test/"),
+        'result_dir': Path("simulation_result/multi/no_other_rl_1000/"),
         'resume': True,
         'resume_model_dir': Path("simulation_result/multi/no_other_rl_1000"),
         'train': False,

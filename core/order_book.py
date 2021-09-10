@@ -626,4 +626,3 @@ class CallOrderBook(OrderBook):
 
         self.num_of_order = 0
         self.num_of_cancelled_order = 0
-        self.current_record = defaultdict(float)

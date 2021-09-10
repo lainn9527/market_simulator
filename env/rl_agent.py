@@ -44,12 +44,17 @@ class BaseAgent:
         self.look_back = look_back
 
     def forward(self, state):
-
         self.states.append(state)
-
         obs = self.obs_wrapper(state)
         obs = torch.from_numpy(obs).to(self.device)
         action = self.rl.forward(obs)
+        return action
+
+    def predict(self, state):
+        self.states.append(state)
+        obs = self.obs_wrapper(state)
+        obs = torch.from_numpy(obs).to(self.device)
+        action = self.rl.predict(obs)
         return action
 
     def calculate_loss(self):
