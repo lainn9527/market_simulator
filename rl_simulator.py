@@ -51,28 +51,29 @@ def train_model(train_config: Dict, env_config: Dict):
     then in every 1024 steps, the model will train on batch of size 64 for 10 times and the total steps are 10240.
     So the model will be updated for (10240 / 1024) * (1024 / 64) * 10 = 1600 times
     '''
-    if train_config['resume']:
-        model = ppo.PPO.load(train_config['resume_model_dir'])
-    else:
-        model = a2c.A2C(policy = "MultiInputPolicy",
-                        env = trading_env,
-                        learning_rate = train_config['learning_rate'],
-                        n_steps = train_config['n_steps'],
-                        verbose = 1,
-                        tensorboard_log = train_output_dir,
-                        policy_kwargs = policy_kwargs)
     # if train_config['resume']:
     #     model = ppo.PPO.load(train_config['resume_model_dir'])
     # else:
-    #     model = ppo.PPO(policy = "MultiInputPolicy",
+    #     model = ppo.A2C(policy = "MultiInputPolicy",
     #                     env = trading_env,
     #                     learning_rate = train_config['learning_rate'],
     #                     n_steps = train_config['n_steps'],
-    #                     batch_size = train_config['batch_size'],
-    #                     n_epochs = train_config['n_epochs'],
     #                     verbose = 1,
     #                     tensorboard_log = train_output_dir,
     #                     policy_kwargs = policy_kwargs)
+    if train_config['resume']:
+        model = ppo.PPO.load(train_config['resume_model_dir'])
+    else:
+        model = ppo.PPO(policy = "MultiInputPolicy",
+                        env = trading_env,
+                        learning_rate = train_config['learning_rate'],
+                        n_steps = train_config['n_steps'],
+                        batch_size = train_config['batch_size'],
+                        n_epochs = train_config['n_epochs'],
+                        verbose = 1,
+                        tensorboard_log = train_output_dir,
+                        policy_kwargs = policy_kwargs,
+                        clip_range_vf = 0.5)
     # down tuan
     callback = TrainingInfoCallback(check_freq = train_config['n_steps'],
                                     result_dir = train_output_dir)
@@ -110,7 +111,7 @@ if __name__=='__main__':
         'test': False,
         'test_steps': 16200,
         'learning_rate': 1e-4,
-        'n_steps': 1800,
+        'n_steps': 180,
         'batch_size': 60,
         'n_epochs': 1,
         'total_timesteps': 16200,

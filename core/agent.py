@@ -306,6 +306,9 @@ class RLAgent(Agent):
         super().step()
         if isinstance(action, type(None)):
             return
+        elif isinstance(action, np.ndarray):
+            action.tolist()
+
 
         bid_or_ask = action[0]
         ticks = action[1]
@@ -322,7 +325,7 @@ class RLAgent(Agent):
             best_bid = self.core.get_best_bids('TSMC', 1)
             best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
             price = round(best_bid + (4-ticks) * tick_size, 2)
-            self.place_limit_bid_order('TSMC', volume, price)
+            self.place_limit_bid_order('TSMC', float(volume), float(price))
 
         elif bid_or_ask == 1:
             # ask
@@ -330,7 +333,7 @@ class RLAgent(Agent):
             best_ask = self.core.get_best_asks('TSMC', 1)
             best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
             price = round(best_ask + (ticks-4) * tick_size, 2)
-            self.place_limit_ask_order('TSMC', volume, price)
+            self.place_limit_ask_order('TSMC', volume.item(), price.item())
 
     def receive_message(self, message):
         super().receive_message(message)

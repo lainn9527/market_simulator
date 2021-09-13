@@ -36,14 +36,14 @@
         "RLAgent": [
             {
                 "name": "rl",
-                "number": 1000,
+                "number": 300,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1
                 },
                 "obs": {
-                    "min_look_back": 10,
-                    "max_look_back": 20
+                    "min_look_back": 2,
+                    "max_look_back": 100
                 }
         
             }

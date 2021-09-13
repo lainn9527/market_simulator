@@ -11,52 +11,16 @@ from typing import Dict
 from pathlib import Path
 from torch.optim import Adam
 from copy import deepcopy
+from collections import namedtuple
 
 from core.utils import write_multi_records
 from core.core import Core
 from env.rl_agent import BaseAgent
 
+Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state'])
+
+
 def train_model(train_config: Dict, env_config: Dict):
-    if not train_config['result_dir'].exists():
-        train_config['result_dir'].mkdir()
-    train_output_dir = train_config['result_dir'] / 'train'
-
-    random_seed = 9527
-    np.random.seed(random_seed)
-    random.seed(random_seed)
-
-
-    # init agent parameters
-    device = torch.device(train_config['device'])
-    if train_config['resume']:
-        resume_config_path = train_config['resume_model_dir'] / 'config.json'
-        resume_config = json.loads(resume_config_path.read_text())
-        env_config['Agent']['RLAgent'] = resume_config['Agent']['RLAgent']
-        num_rl_agent = env_config['Agent']['RLAgent'][0]['number']
-        look_backs = env_config['Agent']['RLAgent'][0]['obs']['look_backs']
-        action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
-        observation_spaces = [look_backs[i]*2 + 2 for i in range(num_rl_agent)]
-        agents = [BaseAgent(observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i]) for i in range(num_rl_agent)]
-        resume_model_path = train_config['resume_model_dir'] / 'model.pkl'
-        checkpoint = torch.load(resume_model_path)
-        for i, agent in enumerate(agents):
-            agent.rl.load_state_dict(checkpoint[f"base_{i}"])
-        print(f"Resume {num_rl_agent} rl agents from {resume_model_path}.")
-
-    else:
-        num_rl_agent = env_config['Agent']['RLAgent'][0]['number']
-        min_look_back = env_config['Agent']['RLAgent'][0]['obs']['min_look_back']
-        max_look_back = env_config['Agent']['RLAgent'][0]['obs']['max_look_back']
-        look_backs = [random.randint(min_look_back, max_look_back) for i in range(num_rl_agent)]
-        action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
-        observation_spaces = [look_backs[i]*2 + 2 for i in range(num_rl_agent)]
-        env_config['Agent']['RLAgent'][0]['obs']['look_backs'] = look_backs
-        agents = [BaseAgent(observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i]) for i in range(num_rl_agent)]
-        print(f"Initiate {num_rl_agent} rl agents.")
-    # record the observation spaces of agents
-    with open(train_config['result_dir'] / 'config.json', 'w') as fp:
-        json.dump(env_config, fp)
-
     def init_env(config: Dict):
         config = deepcopy(config)
         config['Market']['Securities']['TSMC']['price'] = [ round(random.gauss(100, 1), 1) for i in range(100)]
@@ -80,17 +44,73 @@ def train_model(train_config: Dict, env_config: Dict):
         }
         
         return state
+    
+    def init_agents(env_config, resume_model_path = None):
+        num_rl_agent = env_config['Agent']['RLAgent'][0]['number']
+        look_backs = env_config['Agent']['RLAgent'][0]['obs']['look_backs']
+        action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
+        observation_spaces = [look_backs[i]*2 + 2 for i in range(num_rl_agent)]
+        agents = [BaseAgent(algorithm = 'ppo', observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i], lr = lr) for i in range(num_rl_agent)]
+        if resume_model_path is not None:
+            checkpoint = torch.load(resume_model_path)
+            for i, agent in enumerate(agents):
+                agent.rl.load_state_dict(checkpoint[f"base_{i}"])
+            print(f"Resume {num_rl_agent} rl agents from {resume_model_path}.")
+        print(f"Initiate {num_rl_agent} rl agents.")    
+        return agents
+
+        
+    if not train_config['result_dir'].exists():
+        train_config['result_dir'].mkdir()
+    train_output_dir = train_config['result_dir'] / 'train'
+
+    random_seed = 9527
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+
+    # init agent parameters
+    lr = train_config['lr']
+    device = torch.device(train_config['device'])
+
+
+    if train_config['resume']:
+        resume_config_path = train_config['resume_model_dir'] / 'config.json'
+        resume_model_path = train_config['resume_model_dir'] / 'model.pkl'
+        resume_config = json.loads(resume_config_path.read_text())
+        env_config['Agent']['RLAgent'] = resume_config['Agent']['RLAgent']
+        num_rl_agent = env_config['Agent']['RLAgent'][0]['number']
+        look_backs = env_config['Agent']['RLAgent'][0]['obs']['look_backs']
+        action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
+        observation_spaces = [look_backs[i]*2 + 2 for i in range(num_rl_agent)]
+        agents = [BaseAgent(algorithm = 'ppo', observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i], lr = lr) for i in range(num_rl_agent)]
+        checkpoint = torch.load(resume_model_path)
+        for i, agent in enumerate(agents):
+            agent.rl.load_state_dict(checkpoint[f"base_{i}"])
+        print(f"Resume {num_rl_agent} rl agents from {resume_model_path}.")
+
+    else:
+        num_rl_agent = env_config['Agent']['RLAgent'][0]['number']
+        min_look_back = env_config['Agent']['RLAgent'][0]['obs']['min_look_back']
+        max_look_back = env_config['Agent']['RLAgent'][0]['obs']['max_look_back']
+        look_backs = [random.randint(min_look_back, max_look_back) for i in range(num_rl_agent)]
+        action_spaces = [(3, 9, 5) for i in range(num_rl_agent)]
+        observation_spaces = [look_backs[i]*2 + 2 for i in range(num_rl_agent)]
+        env_config['Agent']['RLAgent'][0]['obs']['look_backs'] = look_backs
+        agents = [BaseAgent(algorithm = 'ppo', observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i], lr = lr) for i in range(num_rl_agent)]
+        print(f"Initiate {num_rl_agent} rl agents.")
+
+    # record the observation spaces of agents
+    with open(train_config['result_dir'] / 'config.json', 'w') as fp:
+        json.dump(env_config, fp)
+
         
     # init training parameters
     rl_group_name = f"{env_config['Agent']['RLAgent'][0]['name']}_{env_config['Agent']['RLAgent'][0]['number']}"
 
     if train_config['train']:
         print("Start training...")
-        lr = train_config['lr']
         n_epochs = train_config['train_epochs']
         n_steps = train_config['train_steps']
-        batch_size = train_config['batch_size']
-        optimizers = [Adam(agents[i].get_parameters(), lr = lr) for i in range(num_rl_agent)]
 
         for t in range(n_epochs):
             print(f"Epoch {t} start")
@@ -98,28 +118,28 @@ def train_model(train_config: Dict, env_config: Dict):
             agent_ids = train_env.multi_env_start(random_seed, rl_group_name)
             # shuffle agent_id
             random.shuffle(agent_ids)
-
             rl_agents = {agent_id: agent for agent_id, agent in zip(agent_ids, agents)}
-            rl_optimizers = {agent_id: optimizers for agent_id, optimizers in zip(agent_ids, optimizers)}
             states = {agent_id: get_state(train_env, agent_id, rl_agents[agent_id].look_back) for agent_id in agent_ids}
             rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
+
             for i in range(n_steps):
-                actions = {agent_id: agent.forward(states[agent_id]) for agent_id, agent in rl_agents.items()}
+                # collect actions
+                obs, actions, log_probs, action_status, rewards, next_states = {}, {}, {}, {}, {}, {}
+                for agent_id, agent in rl_agents.items():
+                    obs[agent_id], actions[agent_id], log_probs[agent_id] = agent.forward(states[agent_id])
+
                 train_env.multi_env_step(actions)
-                next_states = {agent_id: get_state(train_env, agent_id, rl_agents[agent_id].look_back) for agent_id in agent_ids}
-                action_status = {agent_id: train_env.get_rl_agent_status(agent_id) for agent_id in agent_ids}
-                rewards = {agent_id: agent.calculate_reward(actions[agent_id], next_states[agent_id], action_status[agent_id]) for agent_id, agent in rl_agents.items()}
-    
-                if i > 0 and i % batch_size == 0:
-                    for agent_id, agent in rl_agents.items():
-                        rl_optimizers[agent_id].zero_grad()
-                        loss = agent.calculate_loss()
-                        loss.backward()
-                        rl_optimizers[agent_id].step()
-                
-                for agent_id in agent_ids:
+
+                for agent_id, agent in rl_agents.items():
+                    next_states[agent_id] = get_state(train_env, agent_id, agent.look_back)
+                    next_obs = agent.obs_wrapper(next_states[agent_id])
+                    action_status[agent_id] = train_env.get_rl_agent_status(agent_id)
+                    rewards[agent_id] = agent.calculate_reward(actions[agent_id], next_states[agent_id], action_status[agent_id])
+                    agent.update(Transition(obs[agent_id], actions[agent_id], sum(rewards[agent_id]), log_probs[agent_id], next_obs))
+
+                    # log                
                     rl_records[agent_id]['states'].append(states[agent_id])
-                    rl_records[agent_id]['actions'].append(actions[agent_id])
+                    rl_records[agent_id]['actions'].append(actions[agent_id].tolist())
                     rl_records[agent_id]['rewards'].append(rewards[agent_id])
                 
                 states = next_states
@@ -127,14 +147,7 @@ def train_model(train_config: Dict, env_config: Dict):
                     print(f"At: {i}, the market state is:\n{train_env.show_market_state()}")
             
             for agent_id, agent in rl_agents.items():
-                # final_reward = 0
-                # rl_records[agent_id]['state'].append(states[agent_id])
-                # rl_records[agent_id]['action'].append(actions[agent_id])
-                # rl_records[agent_id]['rewards'].append(final_reward)
-                # clear agent
-                del agent.states[:]
-                agent.rl.clear_memory()
-
+                agent.end_episode()
 
             orderbooks, agent_manager = train_env.multi_env_close()
             training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
@@ -154,9 +167,9 @@ def train_model(train_config: Dict, env_config: Dict):
         print("Start validating...")
         # validate
         validate_output_dir = train_config['result_dir'] / 'validate'
-        history = []
         n_epochs = train_config['validate_epochs']
         n_steps = train_config['validate_steps']
+
         for t in range(n_epochs):
             print(f"Epoch {t} start")
             validate_env = init_env(env_config)
@@ -171,47 +184,46 @@ def train_model(train_config: Dict, env_config: Dict):
             for i in range(n_steps):
                 actions = {agent_id: agent.predict(states[agent_id]) for agent_id, agent in rl_agents.items()}
                 validate_env.multi_env_step(actions)
-                next_states = {agent_id: get_state(validate_env, agent_id, rl_agents[agent_id].look_back) for agent_id in agent_ids}
-                action_status = {agent_id: validate_env.get_rl_agent_status(agent_id) for agent_id in agent_ids}
-    
-                for agent_id in agent_ids:
+
+                for agent_id, agent in rl_agents.items():
+                    next_states[agent_id] = get_state(train_env, agent_id, agent.look_back)
+                    next_obs = agent.obs_wrapper(next_states[agent_id])
+                    action_status[agent_id] = train_env.get_rl_agent_status(agent_id)
                     rl_records[agent_id]['states'].append(states[agent_id])
-                    rl_records[agent_id]['actions'].append(actions[agent_id])
+                    rl_records[agent_id]['actions'].append(actions[agent_id].tolist())
                 
                 states = next_states
                 print(f"At: {i}, the market state is:\n{validate_env.show_market_state()}")
             
             for agent_id, agent in rl_agents.items():
-                del agent.states[:]
-                agent.rl.clear_memory()
+                agent.end_episode()
 
-            f"validate_output_dir / sim_{i}"
             orderbooks, agent_manager = validate_env.multi_env_close()
             validate_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
             write_multi_records(validate_record, validate_output_dir / f'sim_{t}')
             print(f"Validation result is stored in {validate_output_dir / f'sim_{t}'}")
 
-            
     else:
         print("Skip validating")
+
     print("End the simulation")
 
 
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/no_other_rl_1000/"),
-        'resume': True,
-        'resume_model_dir': Path("simulation_result/multi/no_other_rl_1000"),
-        'train': False,
-        'train_epochs': 8,
-        'train_steps': 2000,
+        'result_dir': Path("simulation_result/multi/ppo_rl_300/"),
+        'resume': False,
+        'resume_model_dir': Path("simulation_result/multi/test"),
+        'train': True,
+        'train_epochs': 10,
+        'train_steps': 2500,
         'batch_size': 64,
         'lr': 1e-4,
         'device': 'cuda',
         'validate': True,
-        'validate_epochs': 2,
-        'validate_steps': 2000,
+        'validate_epochs': 3,
+        'validate_steps': 2500,
     }
     # 4:30 h = 270min = 16200s
     if not model_config['result_dir'].exists():

@@ -1,7 +1,8 @@
 import torch
 import numpy as np
-from .algorithm import ActorCritic
 
+from algorithm.actor_critic import ActorCritic
+from algorithm.ppo import PPO
 
 class BaseAgent:
     '''
@@ -37,8 +38,11 @@ class BaseAgent:
         - origin: present wealth v.s. original wealth, % * 0.2
     '''    
 
-    def __init__(self, observation_space, action_space, device, look_back):
-        self.rl = ActorCritic(observation_space, action_space).to(device)
+    def __init__(self, algorithm, observation_space, action_space, device, look_back, lr = 1e-4, batch_size = 32, buffer_size = 128):
+        if algorithm == 'ppo':
+            self.rl = PPO(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
+        elif algorithm == 'actor_critic':
+            self.rl = ActorCritic(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
         self.states = []
         self.device = device
         self.look_back = look_back
@@ -46,9 +50,15 @@ class BaseAgent:
     def forward(self, state):
         self.states.append(state)
         obs = self.obs_wrapper(state)
-        obs = torch.from_numpy(obs).to(self.device)
-        action = self.rl.forward(obs)
-        return action
+        obs_tensor = torch.from_numpy(obs).to(self.device)
+        actions, log_prob = self.rl.forward(obs_tensor)
+        return obs, np.array(actions), log_prob.cpu().item()
+
+    def update(self, transition):
+        self.rl.buffer.append(transition)
+        if len(self.rl.buffer) % self.rl.buffer_size == 0 and len(self.rl.buffer) > 0:
+            self.rl.update()
+
 
     def predict(self, state):
         self.states.append(state)
@@ -57,21 +67,12 @@ class BaseAgent:
         action = self.rl.predict(obs)
         return action
 
-    def calculate_loss(self):
-        loss = self.rl.calculate_loss()
-        self.rl.clear_memory()
-        return loss
-
 
     def calculate_reward(self, action, next_state, action_status):
         reward = self.reward_wrapper(action, next_state, action_status)
         total_reward = sum(reward)
-        self.rl.rewards.append(total_reward)
         return reward
 
-
-    def get_parameters(self):
-        return self.rl.parameters()
 
     def obs_wrapper(self, obs):
         price = np.array( [value for value in obs['market']['price']], dtype=np.float32)
@@ -129,3 +130,7 @@ class BaseAgent:
 
     def final_reward(self):
         pass
+
+    def end_episode(self):
+        del self.states[:]
+        del self.rl.buffer[:]
