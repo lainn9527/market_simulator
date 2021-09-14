@@ -24,6 +24,9 @@ class AgentManager:
         self.global_config = self.config.pop("Global")
         self.securities_list += securities_list
         self.build_agents()
+        for agent in self.agents.values():
+            agent.start(self.core)
+
 
     def step(self):
         if self.agent_queue.empty():
@@ -90,7 +93,8 @@ class AgentManager:
             records[group_name]['group_asks_volume'] = record['group_asks_volume']
         self.step_records.append(records)
 
-    def get_init_states(self, number, cash, holdings, alpha):
+    def get_init_states(self, group_name, number, cash, holdings, alpha):
+        agent_ids = [f"{group_name}_{i}" for i in range(number)]
         agent_cashes = [ max(int(cash * number * pow(rank+1, -(1/alpha))), 10000) for rank in range(number)]
         agent_holdings = [{code: max(int(num * number * pow(rank+1, -(1/alpha))), 1) for code, num in holdings.items()} for rank in range(number)] 
         agent_average_costs = [random.gauss(mu = 100, sigma = 10) for _ in range(number)]
@@ -99,49 +103,66 @@ class AgentManager:
         if len(risk_preferences) > 1:
             min_risk, max_risk = min(risk_preferences), max(risk_preferences)
             risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
-        return agent_cashes, agent_holdings, agent_average_costs, risk_preferences
+        return agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences
         
     def build_agents(self):
         '''
         The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
         The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
         '''
-        
-        alpha = self.global_config['alpha']
-        for _type, groups in self.config.items():
+        for agent_type, groups in self.config.items():
             if len(groups) == 0:
                 continue
-            group_conuter = 1
             for config in groups:
-                if config['number'] == 0:
-                    continue
-                original_cash = config['cash'] if 'cash' in config.keys() else self.global_config['cash']
-                original_holdings = config['securities'] if 'securities' in config.keys() else self.global_config['securities']
-                # agent_cashes, agent_holdings, agent_average_costs, risk_preferences = self.get_init_states(config['number'], original_cash, original_holdings, alpha)
+                self.build_group_agent(agent_type, config)
+        
 
-                agent_cash = [ max(int(original_cash * config['number'] * pow(rank+1, -(1/alpha))), 10000) for rank in range(config['number'])]
-                agent_holdings = [{code: max(int(num * config['number'] * pow(rank+1, -(1/alpha))), 1) for code, num in original_holdings.items()} for rank in range(config['number'])] 
-                agent_average_cost = [random.gauss(mu = 100, sigma = 10) for _ in range(config['number'])]
-                risk_preferences = [random.gauss(mu = self.global_config['risk_preference_mean'], sigma = self.global_config['risk_preference_var']) for i in range(config['number'])]
+    def build_group_agent(self, agent_type, config):
+        # global
+        n_agents = config['number']
+        if n_agents == 0:
+            return
 
-                if config['number'] > 1:
-                    min_risk, max_risk = min(risk_preferences), max(risk_preferences)
-                    risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
-                    
-                short_type = self.type_abbreviation(_type)
-                group_name = f"{config['name']}_{config['number']}"
-                self.group_agent[group_name] = []
-                self.group_counter[group_name] = 0
-                for i in range(config['number']):
-                    self.group_counter[group_name] += 1
-                    config['_id'] = f"{group_name}_{self.group_counter[group_name]}"
-                    config['cash'], config['securities'], config['risk_preference'], config['average_cost'] = agent_cash[i], agent_holdings[i], risk_preferences[i], agent_average_cost[i]
-                    agent = eval(f"self.build_{short_type}_agent(config)")
-                    agent.start(self.core)
-                    self.agents[agent.unique_id] = agent
-                    self.group_agent[group_name].append(agent.unique_id)
-                
-                self.initial_state[group_name] = {'cash': agent_cash, 'security': agent_holdings}
+        short_type = self.type_abbreviation(agent_type)
+        group_name = f"{config['name']}_{n_agents}" if 'name' in config.keys() else f"{short_type}_{n_agents}"
+        if group_name in self.group_agent.keys():
+            raise Exception("Duplicate group name")
+
+        original_cash = config['cash'] if 'cash' in config.keys() else self.global_config['cash']
+        original_holdings = config['securities'] if 'securities' in config.keys() else self.global_config['securities']
+        alpha = self.global_config['alpha']
+        agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences = self.get_init_states(group_name, n_agents, original_cash, original_holdings, alpha)
+        if agent_type == "ZeroIntelligenceAgent":
+            range_of_price = config['range_of_price']
+            range_of_quantity = config['range_of_quantity']
+            bid_side = config['bid_side']
+            agents = self.build_zi_agent(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side)
+        elif agent_type == "ParallelAgent":
+            range_of_price = config['range_of_price']
+            range_of_quantity = config['range_of_quantity']
+            agents = self.build_pr_agents(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity)
+
+        elif agent_type == "RLAgent":
+            agents = self.build_rl_agents(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "FundamentalistAgent":
+        #     return self.build_fu_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "TrendAgent":
+        #     return self.build_tr_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "MeanRevertAgent":
+        #     return self.build_mr_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "TestAgent":
+        #     return self.build_te_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "RandomAgent":
+        #     return self.build_ra_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        # elif agent_type == "DahooAgent":
+        #     return self.build_dh_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+        else:
+            raise Exception(f"No {agent_type} agent")
+        
+        self.group_agent[group_name] = agent_ids
+        self.initial_state[group_name] = {'cash': agent_cashes, 'security': agent_holdings}
+        
+        self.agents.update({agent_id: agent for agent_id, agent in zip(agent_ids, agents)})
 
     def add_rl_agent(self, config):
         rl_agent = agent.RLAgent(start_cash = config['cash'], start_securities = config['securities'], _id = config['id'])
@@ -150,26 +171,34 @@ class AgentManager:
         self.agents[rl_agent.unique_id] = rl_agent
         self.group_agent[config['name']] = [rl_agent.unique_id]
 
-    def add_rl_agents(self, config):
-        pass
-
-
-    def build_rl_agent(self, config):
-        num = agent.RLAgent.num_of_agent
-        new_agent = agent.RLAgent(_id = config['_id'],
-                                  start_cash = config['cash'],
-                                  start_securities = config['securities'])
+    def build_rl_agents(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences):
+        agents = []
+        n_agents = len(agent_ids)
+        for i in range(n_agents):
+            new_agent = agent.RLAgent(_id = agent_ids[i],
+                                      start_cash = agent_cashes[i],
+                                      start_securities = agent_holdings[i],
+                                      average_cost = agent_average_costs[i],
+                                      risk_preference = risk_preferences[i])
+            agents.append(new_agent)
         
-        return new_agent
+        return agents
 
-    def build_zi_agent(self, config):
-        new_agent = agent.ZeroIntelligenceAgent(_id = config['_id'],
-                                                start_cash = config['cash'],
-                                                start_securities = config['securities'],
-                                                bid_side = config['bid_side'],
-                                                range_of_price = config['range_of_price'],
-                                                range_of_quantity = config['range_of_quantity'])
-        return new_agent
+    def build_zi_agent(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side):
+        agents = []
+        n_agents = len(agent_ids)
+        for i in range(n_agents):
+            new_agent = agent.ZeroIntelligenceAgent(_id = agent_ids[i],
+                                                    start_cash = agent_cashes[i],
+                                                    start_securities = agent_holdings[i],
+                                                    average_cost = agent_average_costs[i],
+                                                    risk_preference = risk_preferences[i],
+                                                    bid_side = bid_side,
+                                                    range_of_price = range_of_price,
+                                                    range_of_quantity = range_of_quantity)
+            agents.append(new_agent)
+
+        return agents
 
     def build_ra_agent(self, config):
         time_window = random.randint(10, config["range_of_time_window"])
@@ -229,15 +258,20 @@ class AgentManager:
         return new_agent
 
 
-    def build_pr_agent(self, config):
-        new_agent = agent.ParallelAgent(_id = config['_id'],
-                                        start_cash = config['cash'], 
-                                        start_securities = config['securities'],
-                                        average_cost= config['average_cost'],
-                                        risk_preference = config['risk_preference'],
-                                        range_of_price = config['range_of_price'],
-                                        range_of_quantity = config['range_of_quantity'])
-        return new_agent
+    def build_pr_agents(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity):
+        agents = []
+        n_agents = len(agent_ids)
+        for i in range(n_agents):
+            new_agent = agent.ParallelAgent(_id = agent_ids[i],
+                                            start_cash = agent_cashes[i], 
+                                            start_securities = agent_holdings[i],
+                                            average_cost= agent_average_costs[i],
+                                            risk_preference = risk_preferences[i],
+                                            range_of_price = range_of_price,
+                                            range_of_quantity = range_of_quantity)
+            agents.append(new_agent)
+        
+        return agents
 
     def type_abbreviation(self, _type):
         if _type == "ZeroIntelligenceAgent":

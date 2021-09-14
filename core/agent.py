@@ -291,7 +291,7 @@ class RLAgent(Agent):
     VALID_ACTION = 1
     INVALID_ACTION = 2
     HOLD = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100):
+    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 1):
         super().__init__(_id = _id, 
                          _type = 'rl',
                          start_cash = start_cash,
@@ -344,13 +344,13 @@ class RLAgent(Agent):
 class ZeroIntelligenceAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
+    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, risk_preference = 1, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5):
         super().__init__(_id = _id, 
                          _type = 'zi',
                          start_cash = start_cash,
                          start_securities = start_securities,
                          average_cost = average_cost,
-                         risk_preference = 1)
+                         risk_preference = risk_preference)
         ZeroIntelligenceAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
@@ -861,7 +861,15 @@ class DahooAgent(Agent):
 class ParallelAgent(Agent):
     num_of_agent = 0
     
-    def __init__(self, _id, start_cash = 1000000, start_securities = None, average_cost = 100, bid_side = 0.5, range_of_price = 5, range_of_quantity = 5, risk_preference = 1):
+    def __init__(self,
+                 _id,
+                 start_cash = 1000000,
+                 start_securities = None,
+                 average_cost = 100,
+                 bid_side = 0.5,
+                 range_of_price = 5,
+                 range_of_quantity = 5,
+                 risk_preference = 1):
         super().__init__(_id = _id, 
                          _type = 'pr',
                          start_cash = start_cash,

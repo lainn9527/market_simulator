@@ -56,7 +56,7 @@ def train_model(train_config: Dict, env_config: Dict):
             for i, agent in enumerate(agents):
                 agent.rl.load_state_dict(checkpoint[f"base_{i}"])
             print(f"Resume {num_rl_agent} rl agents from {resume_model_path}.")
-        print(f"Initiate {num_rl_agent} rl agents.")    
+        print(f"Initiate {num_rl_agent} rl agents.")
         return agents
 
         
