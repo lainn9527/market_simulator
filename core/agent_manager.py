@@ -137,6 +137,7 @@ class AgentManager:
             range_of_quantity = config['range_of_quantity']
             bid_side = config['bid_side']
             agents = self.build_zi_agent(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side)
+
         elif agent_type == "ParallelAgent":
             range_of_price = config['range_of_price']
             range_of_quantity = config['range_of_quantity']
@@ -144,8 +145,10 @@ class AgentManager:
 
         elif agent_type == "RLAgent":
             agents = self.build_rl_agents(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
-        # elif agent_type == "FundamentalistAgent":
-        #     return self.build_fu_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
+
+        elif agent_type == "FundamentalistAgent":
+            securities_value = {code: self.core.get_value(code) for code in self.securities_list}
+            agents = self.build_fu_agent(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, securities_value)
         # elif agent_type == "TrendAgent":
         #     return self.build_tr_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
         # elif agent_type == "MeanRevertAgent":
@@ -210,12 +213,17 @@ class AgentManager:
                                       mean = config['mean'])
         return new_agent
 
-    def build_fu_agent(self, config):
-        securities_vale = {code: self.core.get_value(code) for code in self.securities_list}
-        new_agent = agent.FundamentalistAgent(_id = config['_id'],
-                                              start_cash = config['cash'],
-                                              start_securities = config['securities'],
-                                              securities_value = securities_vale)
+    def build_fu_agent(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, securities_value):
+        agents = []
+        n_agents = len(agent_ids)
+        for i in range(n_agents):
+            new_agent = agent.FundamentalistAgent(_id = agent_ids[i],
+                                                  start_cash = agent_cashes[i],
+                                                  start_securities = agent_holdings[i],
+                                                  average_cost = agent_average_costs[i],
+                                                  risk_preference = risk_preferences[i],
+                                                  securities_value = securities_value)
+            agents.append(new_agent)
         return new_agent
 
     def build_tr_agent(self, config):
