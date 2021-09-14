@@ -36,7 +36,7 @@
         "RLAgent": [
             {
                 "name": "rl",
-                "number": 300,
+                "number": 100,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1

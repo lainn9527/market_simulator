@@ -147,6 +147,7 @@ class Core:
 
 
     def multi_env_step(self, actions):
+        
         self.agent_manager.multi_env_step(actions)
         self.handle_messages()
         self.market.step()

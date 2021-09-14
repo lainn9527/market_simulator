@@ -25,14 +25,6 @@ class AgentManager:
         self.securities_list += securities_list
         self.build_agents()
 
-
-    # def step(self):
-    #     agent_ids = list(self.agents.keys())
-    #     random.shuffle(agent_ids)
-    #     for agent_id in agent_ids:
-    #         self.agents[agent_id].step()
-    #     self.update_record()
-
     def step(self):
         if self.agent_queue.empty():
             agent_ids = list(self.agents.keys())
@@ -98,15 +90,23 @@ class AgentManager:
             records[group_name]['group_asks_volume'] = record['group_asks_volume']
         self.step_records.append(records)
 
+    def get_init_states(self, number, cash, holdings, alpha):
+        agent_cashes = [ max(int(cash * number * pow(rank+1, -(1/alpha))), 10000) for rank in range(number)]
+        agent_holdings = [{code: max(int(num * number * pow(rank+1, -(1/alpha))), 1) for code, num in holdings.items()} for rank in range(number)] 
+        agent_average_costs = [random.gauss(mu = 100, sigma = 10) for _ in range(number)]
+        risk_preferences = [random.gauss(mu = self.global_config['risk_preference_mean'], sigma = self.global_config['risk_preference_var']) for i in range(number)]
+
+        if len(risk_preferences) > 1:
+            min_risk, max_risk = min(risk_preferences), max(risk_preferences)
+            risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+        return agent_cashes, agent_holdings, agent_average_costs, risk_preferences
+        
     def build_agents(self):
         '''
-            The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
-            The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
+        The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
+        The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
         '''
         
-        original_cash = self.global_config['cash']
-        original_holdings = self.global_config['securities']
-        # control the decreasing level
         alpha = self.global_config['alpha']
         for _type, groups in self.config.items():
             if len(groups) == 0:
@@ -117,7 +117,8 @@ class AgentManager:
                     continue
                 original_cash = config['cash'] if 'cash' in config.keys() else self.global_config['cash']
                 original_holdings = config['securities'] if 'securities' in config.keys() else self.global_config['securities']
-                
+                # agent_cashes, agent_holdings, agent_average_costs, risk_preferences = self.get_init_states(config['number'], original_cash, original_holdings, alpha)
+
                 agent_cash = [ max(int(original_cash * config['number'] * pow(rank+1, -(1/alpha))), 10000) for rank in range(config['number'])]
                 agent_holdings = [{code: max(int(num * config['number'] * pow(rank+1, -(1/alpha))), 1) for code, num in original_holdings.items()} for rank in range(config['number'])] 
                 agent_average_cost = [random.gauss(mu = 100, sigma = 10) for _ in range(config['number'])]

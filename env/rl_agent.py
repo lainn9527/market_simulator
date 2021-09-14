@@ -65,12 +65,11 @@ class BaseAgent:
         obs = self.obs_wrapper(state)
         obs = torch.from_numpy(obs).to(self.device)
         action = self.rl.predict(obs)
-        return action
+        return np.array(action)
 
 
     def calculate_reward(self, action, next_state, action_status):
         reward = self.reward_wrapper(action, next_state, action_status)
-        total_reward = sum(reward)
         return reward
 
 

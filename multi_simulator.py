@@ -182,18 +182,20 @@ def train_model(train_config: Dict, env_config: Dict):
             rl_records = {agent_id: {'states': [], 'actions': []} for agent_id in agent_ids}
 
             for i in range(n_steps):
+                actions, action_status, next_states = {}, {}, {}
                 actions = {agent_id: agent.predict(states[agent_id]) for agent_id, agent in rl_agents.items()}
                 validate_env.multi_env_step(actions)
 
                 for agent_id, agent in rl_agents.items():
-                    next_states[agent_id] = get_state(train_env, agent_id, agent.look_back)
+                    next_states[agent_id] = get_state(validate_env, agent_id, agent.look_back)
                     next_obs = agent.obs_wrapper(next_states[agent_id])
-                    action_status[agent_id] = train_env.get_rl_agent_status(agent_id)
+                    action_status[agent_id] = validate_env.get_rl_agent_status(agent_id)
                     rl_records[agent_id]['states'].append(states[agent_id])
                     rl_records[agent_id]['actions'].append(actions[agent_id].tolist())
                 
                 states = next_states
-                print(f"At: {i}, the market state is:\n{validate_env.show_market_state()}")
+                if i % 10 == 0:
+                    print(f"At: {i}, the market state is:\n{validate_env.show_market_state()}")
             
             for agent_id, agent in rl_agents.items():
                 agent.end_episode()
@@ -212,10 +214,10 @@ def train_model(train_config: Dict, env_config: Dict):
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/ppo_rl_300/"),
-        'resume': False,
-        'resume_model_dir': Path("simulation_result/multi/test"),
-        'train': True,
+        'result_dir': Path("simulation_result/multi/ppo_rl_500/"),
+        'resume': True,
+        'resume_model_dir': Path("simulation_result/multi/ppo_rl_500/"),
+        'train': False,
         'train_epochs': 10,
         'train_steps': 2500,
         'batch_size': 64,
@@ -223,14 +225,16 @@ if __name__=='__main__':
         'device': 'cuda',
         'validate': True,
         'validate_epochs': 3,
-        'validate_steps': 2500,
+        'validate_steps': 500,
     }
     # 4:30 h = 270min = 16200s
     if not model_config['result_dir'].exists():
         model_config['result_dir'].mkdir(parents=True)
     
+
     start_time = perf_counter()
     env_config = json.loads(model_config['config_path'].read_text())
+    # env_config['Agent']['RLAgent'][0]['number'] = 100
     train_model(model_config, env_config)
     
 

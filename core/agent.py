@@ -333,7 +333,7 @@ class RLAgent(Agent):
             best_ask = self.core.get_best_asks('TSMC', 1)
             best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
             price = round(best_ask + (ticks-4) * tick_size, 2)
-            self.place_limit_ask_order('TSMC', volume.item(), price.item())
+            self.place_limit_ask_order('TSMC', float(volume), float(price))
 
     def receive_message(self, message):
         super().receive_message(message)
