@@ -41,11 +41,8 @@
                 "securities": {
                     "TSMC": 1
                 },
-                "obs": {
-                    "min_look_back": 2,
-                    "max_look_back": 100
-                }
-        
+                "min_look_back": 2,
+                "max_look_back": 100
             }
         ]
     },

@@ -1,6 +1,8 @@
 import random
 import numpy as np
 import gym
+import json
+import torch
 from core import agent
 from collections import defaultdict
 from typing import Dict, List
@@ -10,82 +12,111 @@ from datetime import datetime
 from pathlib import Path
 from copy import deepcopy
 from core.core import Core
-
+from .rl_agent import BaseAgent
 
 
 
 class MultiTradingEnv:
 
     def __init__(self, config: Dict):
-        '''
-        Action Space
-            1. Discrete 3 - BUY[0], SELL[1], HOLD[2]
-            2. Discrete 9 - TICK_-4[0], TICK_-3[1], TICK_-2[2], TICK_-1[3], TICK_0[4], TICK_1[5], TICK_2[6], TICK_3[7], TICK_4[8]
-            3. Discrete 5 - VOLUME_1[0], VOLUME_2[1], VOLUME_3[2], VOLUME_4[3], VOLUME_5[4],
-        
-        State Space
-            1. Price and Volume: close, highest, lowest, average price, and volume of previous [lookback] days -> 5 * [lookback]
-            2. Agent: cash, holdings -> 2
-            Total: 5 * [lookback] + 2
-        '''
         self.config = config
         self.train = True
     
+    def build_agents(self,
+                     resume,
+                     resume_model_dir,
+                     lr,
+                     device,
+                     agent_config):
+
+        # device = torch.device(train_config['device'])
+
+        # build
+        if resume:
+            resume_config_path = resume_model_dir / 'config.json'
+            resume_model_path = resume_model_dir / 'model.pkl'
+            resume_config = json.loads(resume_config_path.read_text())
+            agent_config = resume_config['Agent']['RLAgent']
+        
+        agents = []
+        for config in agent_config:
+            agents += self.build_agent(config)
+        
+        if resume:
+            checkpoint = torch.load(resume_model_path)
+            for i, agent in enumerate(agents):
+                agent.rl.load_state_dict(checkpoint[f"base_{i}"])
+            print(f"Resume {len(agents)} rl agents from {resume_model_path}.")
+        else:
+            print(f"Initiate {len(agents)} rl agents.")
+        
+        return agents
+
+    def build_agent(self, lr, device, config):
+        agent_type = config['type']
+        n_agent = config['number']
+        algorithm = config['algorithm']
+        if agent_type == "trend":
+            if 'look_backs' in config.keys():
+                look_backs = config['look_backs']
+            else:
+                min_look_back = config['min_look_back']
+                max_look_back = config['max_look_back']
+                look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
+            action_spaces = [(3, 9, 5) for i in range(n_agent)]
+            observation_spaces = [look_backs[i]*2 + 2 for i in range(n_agent)]
+            config['look_backs'] = look_backs
+            agents = [BaseAgent(algorithm = algorithm, observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i], lr = lr) for i in range(n_agent)]
+        elif agent_type == "value":
+            pass
+        
+        return agents
+
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def reset(self, look_backs: List):
-        # register the core for the market and agents
-        config = deepcopy(self.config)
-        config['Market']['Securities']['TSMC']['price'] = [random.gauss(100, 1) for i in range(100)]
+    def reset(self, config):
+        config = deepcopy(config)
+        config['Market']['Securities']['TSMC']['price'] = [ round(random.gauss(100, 1), 1) for i in range(100)]
         config['Market']['Securities']['TSMC']['volume'] = [int(random.gauss(100, 10)*10) for i in range(100)]
-        config['Market']['Securities']['TSMC']['value'] = [random.gauss(100, 1) for i in range(100)]
-        config['Agent']['RLAgent'][0]['obs']['look_backs'] = look_backs
-
+        config['Market']['Securities']['TSMC']['value'] = [round(random.gauss(100, 1), 1) for i in range(100)]
         self.core = Core(config, market_type="call")
-        rl_group_name = f"{config['Agent']['RLAgent'][0]['name']}_{config['Agent']['RLAgent'][0]['number']}"
-        self.agents = self.core.multi_env_start(random_seed = 9527, group_name = rl_group_name)
+        agent_ids = self.core.multi_env_start(987, 'rl')
+        init_states = self.get_states()
 
-        # make the agent of market simulater the env agent
-        self.start_state = {agent_id: self.get_obs(agent_id = agent_id) for agent_id in self.agents}
-        self.states = {agent_id: [self.start_state[agent_id]] for agent_id in self.agents}
-        agent_obs = {agent_id: self.obs_wrapper(self.start_state[agent_id]) for agent_id in self.agents}
-
-        
-        print("Set up the following agents:")
-        print(self.agents)
-
-        return self.agents, self.start_state
+        return agent_ids, init_states
 
     def step(self, actions):
+        rewards = []
+        next_states = []
+        return rewards, next_states
 
-        self.core.multi_env_step(actions)
-        for agent_id in self.agents:
-            self.states[agent_id].append(self.get_obs(agent_id = agent_id))
-    
-        agents_obs = {agent_id: self.states[agent_id][-1] for agent_id in self.agents}
+    def get_states(self):
+        pass
+
+    def get_state(self, agent_id, look_back):
+        market_stats = self.core.get_call_env_state(look_back)
+        market = {
+            'price': market_stats['price'],
+            'volume': market_stats['volume'],
+        }
+
+        rl_agent = {'cash': self.core.agent_manager.agents[agent_id].cash,
+                    'TSMC': self.core.agent_manager.agents[agent_id].holdings['TSMC'],
+                    'wealth': self.core.agent_manager.agents[agent_id].wealth,}
+        state = {
+            'market': market,
+            'agent': rl_agent
+        }
         
-        done = {agent_id: False for agent_id in self.agents}
-        info = {}
-
-        # record the action & reward in previous state (s_t-1 -> a_t, r_t)
-        for agent_id in self.agents:
-            self.states[agent_id][-2]['action'] = {'action': actions[agent_id], 'is_valid': is_valids[agent_id]}
-            self.states[agent_id][-2]['reward'] = {'total_reward': rewards[agent_id], 'action_reward': action_rewards[agent_id], 'wealth_reward': wealth_rewards[agent_id]}
-
-        # print out the training info
-        # if self.train and self.core.timestep % 1000 == 0:
-        #     record_states = self.states[-1:-1000:-1]
-
-        return agents_obs
-    
+        return state
 
     def get_obs(self, agent_id):
         look_back = self.core.agent_manager.agents[agent_id].look_back
         timestep = self.core.timestep
 
-        market_stats = self.core.get_parallel_env_state(look_back)
+        market_stats = self.core.get_call_env_state(look_back)
         price = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],

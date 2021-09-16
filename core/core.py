@@ -233,9 +233,10 @@ class Core:
                  'asks': self.get_best_asks(code='TSMC', number = best_price),}
         return state
 
-    def get_parallel_env_state(self, lookback):
+    def get_call_env_state(self, lookback):
         state = {'price': self.get_records(code='TSMC', _type = 'price', step = lookback),
                  'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback),
+                 'value': self.get_records(code='TSMC', _type = 'value', step = lookback),
         }
         return state
     

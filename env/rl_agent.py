@@ -51,8 +51,9 @@ class BaseAgent:
         self.states.append(state)
         obs = self.obs_wrapper(state)
         obs_tensor = torch.from_numpy(obs).to(self.device)
-        actions, log_prob = self.rl.forward(obs_tensor)
-        return obs, np.array(actions), log_prob.cpu().item()
+        action, log_prob = self.rl.forward(obs_tensor)
+        action = self.action_wrapper(action)
+        return obs, np.array(action), log_prob.cpu().item()
 
     def update(self, transition):
         self.rl.buffer.append(transition)
@@ -65,6 +66,7 @@ class BaseAgent:
         obs = self.obs_wrapper(state)
         obs = torch.from_numpy(obs).to(self.device)
         action = self.rl.predict(obs)
+        action = self.action_wrapper(action)
         return np.array(action)
 
 
@@ -72,6 +74,9 @@ class BaseAgent:
         reward = self.reward_wrapper(action, next_state, action_status)
         return reward
 
+
+    def action_wrapper(self, action):
+        
 
     def obs_wrapper(self, obs):
         price = np.array( [value for value in obs['market']['price']], dtype=np.float32)
@@ -92,7 +97,6 @@ class BaseAgent:
 
     def reward_wrapper(self, action, next_state, action_status):
         # action reward
-        is_valid = 1
         action_reward = 0
 
         if action[0] == 0 or action[0] == 1:
@@ -101,7 +105,6 @@ class BaseAgent:
                 action_reward += 0.3
             elif action_status == 2:
                 action_reward -= 0.2
-                is_valid = 0
             
         elif action[0] == 2:
             action_reward -= 0.02
@@ -125,7 +128,7 @@ class BaseAgent:
 
         wealth_reward = wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
 
-        return action_reward, wealth_reward, is_valid
+        return action_reward, wealth_reward
 
     def final_reward(self):
         pass
@@ -133,3 +136,10 @@ class BaseAgent:
     def end_episode(self):
         del self.states[:]
         del self.rl.buffer[:]
+
+
+class ValueAgent(BaseAgent):
+    def __init__(self, algorithm, observation_space, action_space, device, look_back, lr, batch_size, buffer_size):
+        super().__init__(algorithm, observation_space, action_space, device, look_back, lr=lr, batch_size=batch_size, buffer_size=buffer_size)
+
+    def 

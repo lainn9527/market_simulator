@@ -161,7 +161,7 @@ class ParallelTradingEnv(ParallelEnv):
         obs_config = self.config['Env']['obs']
         timestep = self.core.timestep
 
-        market_stats = self.core.get_parallel_env_state(obs_config['lookback'])
+        market_stats = self.core.get_call_env_state(obs_config['lookback'])
         price = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],

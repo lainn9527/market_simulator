@@ -103,6 +103,8 @@ class AgentManager:
         if len(risk_preferences) > 1:
             min_risk, max_risk = min(risk_preferences), max(risk_preferences)
             risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+        random.shuffle(agent_cashes)
+        random.shuffle(agent_holdings)
         return agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences
         
     def build_agents(self):
@@ -118,7 +120,7 @@ class AgentManager:
         
 
     def build_group_agent(self, agent_type, config):
-        # global
+        # global configs
         n_agents = config['number']
         if n_agents == 0:
             return
