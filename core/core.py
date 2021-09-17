@@ -139,7 +139,9 @@ class Core:
         self.market.start()
         self.agent_manager.start(self.market.get_securities())
         
-        agent_ids = list(self.agent_manager.group_agent[group_name])
+        agent_ids = []
+        for name in group_name:
+            agent_ids += list(self.agent_manager.group_agent[name])
         self.timestep = 0
         self.market.open_session()
 
@@ -233,10 +235,10 @@ class Core:
                  'asks': self.get_best_asks(code='TSMC', number = best_price),}
         return state
 
-    def get_call_env_state(self, lookback):
-        state = {'price': self.get_records(code='TSMC', _type = 'price', step = lookback),
-                 'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback),
-                 'value': self.get_records(code='TSMC', _type = 'value', step = lookback),
+    def get_call_env_state(self, lookback, from_last = True):
+        state = {'price': self.get_records(code='TSMC', _type = 'price', step = lookback, from_last = from_last),
+                 'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback, from_last = from_last),
+                 'value': self.get_records(code='TSMC', _type = 'value', step = lookback, from_last = from_last),
         }
         return state
     

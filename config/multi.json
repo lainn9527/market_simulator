@@ -36,6 +36,8 @@
         "RLAgent": [
             {
                 "name": "rl",
+                "type": "trend",
+                "algorithm": "ppo",
                 "number": 100,
                 "cash": 10000,
                 "securities": {

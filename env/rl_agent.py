@@ -76,11 +76,12 @@ class BaseAgent:
 
 
     def action_wrapper(self, action):
-        
+        return action
 
     def obs_wrapper(self, obs):
-        price = np.array( [value for value in obs['market']['price']], dtype=np.float32)
-        volume = np.array( [value for value in obs['market']['volume']], dtype=np.float32)
+
+        price = np.array( [value for value in obs['market']['price'][:self.look_back]], dtype=np.float32)
+        volume = np.array( [value for value in obs['market']['volume'][:self.look_back]], dtype=np.float32)
         agent_state = np.array( [value for key, value in obs['agent'].items() if key != 'wealth'], dtype=np.float32)
         
         # use base price to normalize
@@ -142,4 +143,17 @@ class ValueAgent(BaseAgent):
     def __init__(self, algorithm, observation_space, action_space, device, look_back, lr, batch_size, buffer_size):
         super().__init__(algorithm, observation_space, action_space, device, look_back, lr=lr, batch_size=batch_size, buffer_size=buffer_size)
 
-    def 
+    def action_wrapper(self, action):
+        return super().action_wrapper(action)
+    
+    def obs_wrapper(self, obs):
+        
+
+
+        return super().obs_wrapper(obs)
+    
+    def reward_wrapper(self, action, next_state, action_status):
+        # the action should follow the value
+
+
+        return super().reward_wrapper(action, next_state, action_status)
