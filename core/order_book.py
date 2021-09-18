@@ -72,14 +72,11 @@ class OrderBook:
         base_price = self.value
 
         # initalize the valid price list
-        tick_size = self.market.determine_tick_size(base_price)
         # self.bids_price.append(base_price)
         # self.asks_price.append(base_price)
         # point to the base price
-        self.tick_size = tick_size
-
-        record_list = ['open', 'high', 'low',
-                       'close', 'average', 'volume', 'amount', 'bid', 'ask', 'price_volume', 'bid_five_price', 'ask_five_price']
+        self.tick_size = self.market.determine_tick_size(base_price)
+        record_list = ['open', 'high', 'low', 'close', 'average', 'volume', 'amount', 'bid', 'ask', 'price_volume', 'bid_five_price', 'ask_five_price']
         self.steps_record.update({key: [] for key in record_list})
         self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
 
@@ -596,7 +593,11 @@ class CallOrderBook(OrderBook):
                     break
 
         # update
-        updated_info = {'price': match_price, 'volume': match_volume, 'amount': round(match_price * match_volume, 2), 'bid': self.bids_sum, 'ask': self.asks_sum}
+        updated_info = {'price': match_price,
+                        'volume': match_volume,
+                        'amount': round(match_price * match_volume, 2),
+                        'bid': self.bids_sum,
+                        'ask': self.asks_sum,}
         self.update_record(**updated_info)
 
     def clear_orders(self):
@@ -605,10 +606,11 @@ class CallOrderBook(OrderBook):
 
     def update_record(self, **name_val):
         self.current_record.update(name_val)
+
+    def step_summarize(self):
         self.current_record['bid_five_price'] = {price: self.bids_volume[price] for price in self.bids_price[:5]}
         self.current_record['ask_five_price'] = {price: self.asks_volume[price] for price in self.asks_price[:5]}
-    
-    def step_summarize(self):
+        self.current_record['value'] = self.value
         for key in self.steps_record.keys():
             self.steps_record[key].append(self.current_record[key])
 

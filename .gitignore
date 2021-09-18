@@ -10,3 +10,4 @@ simulation_result
 .vscode
 *.code-workspace
 tmp.py
+parallel

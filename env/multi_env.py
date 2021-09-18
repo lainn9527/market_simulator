@@ -36,7 +36,7 @@ class MultiTradingEnv:
         self.core = Core(config, market_type="call")
         agent_ids = self.core.multi_env_start(987, self.group_name)
         self.agent_ids = agent_ids
-        init_states = self.get_states()   
+        init_states = self.get_states() 
 
         return agent_ids, init_states
 
@@ -50,9 +50,11 @@ class MultiTradingEnv:
 
     def close(self):
         orderbooks, agent_manager = self.core.multi_env_close()
+
         return orderbooks, agent_manager
 
     def seed(self, s):
+        
         return s
 
     def render(self, timestep):
@@ -124,6 +126,7 @@ class MultiTradingEnv:
         market = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],
+            'value': market_stats['value']
         }
 
         rl_agent = {'cash': self.core.agent_manager.agents[agent_id].cash,

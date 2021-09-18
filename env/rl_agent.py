@@ -79,19 +79,22 @@ class BaseAgent:
         return action
 
     def obs_wrapper(self, obs):
-
+        # market
         price = np.array( [value for value in obs['market']['price'][:self.look_back]], dtype=np.float32)
         volume = np.array( [value for value in obs['market']['volume'][:self.look_back]], dtype=np.float32)
-        agent_state = np.array( [value for key, value in obs['agent'].items() if key != 'wealth'], dtype=np.float32)
-        
-        # use base price to normalize
         start_price = self.states[0]['market']['price'][0]
         start_volume = self.states[0]['market']['volume'][0]
         price = price / start_price
         volume = volume / start_volume
         price = price.flatten()
         volume = volume.flatten()
-        agent_state[0] = agent_state[0] / (start_price*100)
+
+        # agent
+        cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
+        holdings = obs['agent']['TSMC'] / self.states[0]['agent']['TSMC']
+        wealth = obs['agent']['wealth'] / self.states[0]['agent']['wealth']
+        agent_state = np.array([cash, holdings, wealth], np.float32)
+        # use base price to normalize
 
         # concat
         return np.concatenate([price, volume, agent_state])
@@ -144,13 +147,21 @@ class ValueAgent(BaseAgent):
         super().__init__(algorithm, observation_space, action_space, device, look_back, lr=lr, batch_size=batch_size, buffer_size=buffer_size)
 
     def action_wrapper(self, action):
-        return super().action_wrapper(action)
+        return action
     
     def obs_wrapper(self, obs):
+        # market states with normalization
+        price = obs['market']['price'][0] / obs['market']['price'][-1]
+        volume = obs['market']['volume'][0] / obs['market']['volume'][-1]
+        value = obs['market']['value'][0] / obs['market']['value'][-1]
+        market_state = np.array([price, volume, value], dtype = np.float32)
         
-
-
-        return super().obs_wrapper(obs)
+        # agent states
+        cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
+        holdings = obs['agent']['TSMC'] / self.states[0]['agent']['TSMC']
+        wealth = obs['agent']['wealth'] / self.states[0]['agent']['wealth']
+        agent_state = np.array([cash, holdings, wealth], np.float32)
+        return np.concatenate([market_state, agent_state])
     
     def reward_wrapper(self, action, next_state, action_status):
         # the action should follow the value
