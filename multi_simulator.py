@@ -133,11 +133,11 @@ def train_model(train_config: Dict, env_config: Dict):
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/test/"),
+        'result_dir': Path("simulation_result/multi/ppo_250_ac_25/"),
         'resume': False,
         'resume_model_dir': Path("simulation_result/multi/ppo_rl_500/"),
         'train': True,
-        'train_epochs': 2,
+        'train_epochs': 8,
         'train_steps': 2500,
         'batch_size': 32,
         'lr': 1e-4,

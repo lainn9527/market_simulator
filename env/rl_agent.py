@@ -41,7 +41,7 @@ class BaseAgent:
     def __init__(self, algorithm, observation_space, action_space, device, look_back, lr = 1e-4, batch_size = 32, buffer_size = 128):
         if algorithm == 'ppo':
             self.rl = PPO(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
-        elif algorithm == 'actor_critic':
+        elif algorithm == 'ac':
             self.rl = ActorCritic(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
         self.states = []
         self.device = device

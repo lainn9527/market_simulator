@@ -56,11 +56,11 @@ class AgentManager:
         for agent_id in agent_ids:
             self.agents[agent_id].step(actions[agent_id])
 
-    def multi_env_step(self, actions, group_name = 'rl'):
+    def multi_env_step(self, actions):
         agent_ids = list(self.agents.keys())
         random.shuffle(agent_ids)
         for agent_id in agent_ids:
-            if agent_id.startswith(group_name):
+            if isinstance(self.agents[agent_id], agent.RLAgent):
                 self.agents[agent_id].step(actions[agent_id])
             else:
                 self.agents[agent_id].step()
