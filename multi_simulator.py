@@ -58,7 +58,7 @@ def train_model(train_config: Dict, env_config: Dict):
                 rewards, next_states, next_obs = multi_env.step(actions)
 
                 for agent_id, agent in zip(agent_ids, agents):
-                    agent.update(Transition(obs[agent_id], actions[agent_id], sum(rewards[agent_id]), log_probs[agent_id], next_obs[agent_id]))
+                    agent.update(Transition(obs[agent_id], actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id]))
 
                     # log                
                     rl_records[agent_id]['states'].append(states[agent_id]['agent'])
@@ -133,7 +133,7 @@ def train_model(train_config: Dict, env_config: Dict):
 if __name__=='__main__':
     model_config = {
         'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/ppo_250_ac_25/"),
+        'result_dir': Path("simulation_result/multi/all_100/"),
         'resume': False,
         'resume_model_dir': Path("simulation_result/multi/ppo_rl_500/"),
         'train': True,

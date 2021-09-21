@@ -220,6 +220,9 @@ class Core:
     def get_transaction_rate(self):
         return self.market.get_transaction_rate()
     
+    def get_risk_free_rate(self):
+        return self.market.get_risk_free_rate()
+
     def get_stock_size(self):
         return self.market.stock_size
 
@@ -236,9 +239,11 @@ class Core:
         return state
 
     def get_call_env_state(self, lookback, from_last = True):
-        state = {'price': self.get_records(code='TSMC', _type = 'price', step = lookback, from_last = from_last),
-                 'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback, from_last = from_last),
-                 'value': self.get_records(code='TSMC', _type = 'value', step = lookback, from_last = from_last),
+        state = {
+            'price': self.get_records(code='TSMC', _type = 'price', step = lookback, from_last = from_last),
+            'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback, from_last = from_last),
+            'value': self.get_records(code='TSMC', _type = 'value', step = lookback, from_last = from_last),
+            'risk_free_rate': self.get_risk_free_rate()
         }
         return state
     

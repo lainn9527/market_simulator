@@ -1,13 +1,12 @@
 {
     "Core": {
-        "result_name": "dahoo",
-        "timestep": 16200,
+        "result_name": "multi",
         "show_price": true
     },
     "Market":{
         "Structure": {
-            "interest_rate": 0.01,
-            "interest_period": 400,
+            "interest_rate": 0.0004,
+            "interest_period": 1,
             "clear_period": 200,
             "transaction_rate": 0.002,
             "order_capacity": 50
@@ -35,10 +34,10 @@
         },
         "RLAgent": [
             {
-                "name": "ppo",
+                "name": "ppo_tr",
                 "type": "trend",
                 "algorithm": "ppo",
-                "number": 250,
+                "number": 100,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1
@@ -47,16 +46,36 @@
                 "max_look_back": 100
             },
             {
-                "name": "ac",
+                "name": "ppo_va",
+                "type": "value",
+                "algorithm": "ppo",
+                "number": 100,
+                "cash": 10000,
+                "securities": {
+                    "TSMC": 1
+                }
+            },
+            {
+                "name": "ac_tr",
                 "type": "trend",
                 "algorithm": "ac",
-                "number": 250,
+                "number": 100,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1
                 },
                 "min_look_back": 2,
                 "max_look_back": 100
+            },
+            {
+                "name": "ac_va",
+                "type": "value",
+                "algorithm": "ac",
+                "number": 100,
+                "cash": 10000,
+                "securities": {
+                    "TSMC": 1
+                }
             }
         ]
     },

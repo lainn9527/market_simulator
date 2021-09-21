@@ -18,7 +18,7 @@ class PPO(nn.Module):
         self.value_layer = nn.Linear(32, 1)
         self.actor_optimizer = Adam(self.action_layer.parameters(), lr)
         self.value_optimizer = Adam(self.value_layer.parameters(), lr)
-
+        self.activation_fn = torch.tanh
         self.buffer = []
         self.buffer_size = buffer_size
         self.batch_size = batch_size
@@ -30,7 +30,7 @@ class PPO(nn.Module):
 
     def forward(self, state):
         with torch.no_grad():
-            state = F.relu(self.affine(state))
+            state = self.activation_fn(self.affine(state))
             logits = self.action_layer(state).split(self.action_space)
         
         probs = [F.softmax(logit, dim = 0) for logit in logits]
@@ -57,8 +57,8 @@ class PPO(nn.Module):
 
     def update(self):
         states, actions, rewards, log_probs, next_states = self.get_buffer_data()
-        values = self.value_layer(F.relu(self.affine(states))).detach().squeeze()
-        next_values = self.value_layer(F.relu(self.affine(next_states))).detach().squeeze()
+        values = self.value_layer(self.activation_fn(self.affine(states))).detach().squeeze()
+        next_values = self.value_layer(self.activation_fn(self.affine(next_states))).detach().squeeze()
         
 
         # advantage & returns
@@ -88,7 +88,7 @@ class PPO(nn.Module):
             batch_returns = (batch_returns - batch_returns.mean()) / (batch_returns.std() + 1e-8)
 
             # policy loss
-            logits = self.action_layer(F.relu(self.affine(batch_states))).split(self.action_space, dim = 1)
+            logits = self.action_layer(self.activation_fn(self.affine(batch_states))).split(self.action_space, dim = 1)
             probs = [F.softmax(logit, dim = 1) for logit in logits]
             dists = [Categorical(prob) for prob in probs]
             new_log_probs = dists[0].log_prob(batch_actions[:, 0]) + dists[1].log_prob(batch_actions[:, 1]) + dists[2].log_prob(batch_actions[:, 2])
@@ -101,7 +101,7 @@ class PPO(nn.Module):
             entropy_loss = (dists[0].entropy().mean() + dists[1].entropy().mean() + dists[2].entropy().mean()) / 3
 
             # value loss
-            new_values = self.value_layer(F.relu(self.affine(batch_states))).squeeze()
+            new_values = self.value_layer(self.activation_fn(self.affine(batch_states))).squeeze()
             value_pred = torch.clamp(new_values, old_values - clip_range, old_values + clip_range)
             value_loss_1 = F.mse_loss(value_pred, batch_returns)
             value_loss_2 = F.mse_loss(new_values, batch_returns)
@@ -123,7 +123,7 @@ class PPO(nn.Module):
     
     def predict(self, state):
         with torch.no_grad():
-            state = F.relu(self.affine(state))
+            state = self.activation_fn(self.affine(state))
             logits = self.action_layer(state).split(self.action_space)
         
         probs = [F.softmax(logit, dim = 0) for logit in logits]

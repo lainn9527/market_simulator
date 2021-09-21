@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from copy import deepcopy
 from core.core import Core
-from .rl_agent import BaseAgent
+from .rl_agent import BaseAgent, ValueAgent
 
 
 
@@ -95,7 +95,7 @@ class MultiTradingEnv:
         n_agent = config['number']
         algorithm = config['algorithm']
         group_name = f"{config['name']}_{config['number']}"
-
+        agents = []
         if agent_type == "trend":
             if 'look_backs' in config.keys():
                 look_backs = config['look_backs']
@@ -104,12 +104,27 @@ class MultiTradingEnv:
                 max_look_back = config['max_look_back']
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
             action_spaces = [(3, 9, 5) for i in range(n_agent)]
-            observation_spaces = [look_backs[i]*2 + 2 for i in range(n_agent)]
-            agents = [BaseAgent(algorithm = algorithm, observation_space = observation_spaces[i], action_space = action_spaces[i], device = device, look_back = look_backs[i], lr = lr) for i in range(n_agent)]
+            observation_spaces = [look_backs[i]*2 + 3 for i in range(n_agent)]
+            for i in range(n_agent):
+                trend_agent = BaseAgent(algorithm = algorithm,
+                                        observation_space = observation_spaces[i],
+                                        action_space = action_spaces[i],
+                                        device = device,
+                                        look_back = look_backs[i], 
+                                        lr = lr)
+                agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs
         elif agent_type == "value":
-            pass
+            action_spaces = [(3, 9, 5) for i in range(n_agent)]
+            observation_spaces = [7 for i in range(n_agent)]
+            for i in range(n_agent):
+                trend_agent = ValueAgent(algorithm = algorithm,
+                                        observation_space = observation_spaces[i],
+                                        action_space = action_spaces[i],
+                                        device = device,
+                                        lr = lr)
+                agents.append(trend_agent)
         
         return group_name, agents
 
@@ -126,7 +141,8 @@ class MultiTradingEnv:
         market = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],
-            'value': market_stats['value']
+            'value': market_stats['value'],
+            'risk_free_rate': market_stats['risk_free_rate'],
         }
 
         rl_agent = {'cash': self.core.agent_manager.agents[agent_id].cash,

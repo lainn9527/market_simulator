@@ -604,13 +604,15 @@ class CallOrderBook(OrderBook):
         for order_id in self.current_orders[:]:
             self.cancel_order(order_id)
 
+    def adjust_value(self, v):
+        self.current_record['value'] += v
+    
     def update_record(self, **name_val):
         self.current_record.update(name_val)
 
     def step_summarize(self):
         self.current_record['bid_five_price'] = {price: self.bids_volume[price] for price in self.bids_price[:5]}
         self.current_record['ask_five_price'] = {price: self.asks_volume[price] for price in self.asks_price[:5]}
-        self.current_record['value'] = self.value
         for key in self.steps_record.keys():
             self.steps_record[key].append(self.current_record[key])
 

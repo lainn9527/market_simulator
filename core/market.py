@@ -105,6 +105,10 @@ class Market:
                 self.send_message(Message('AGENT', 'ISSUE_DIVIDEND', 'MARKET', order_record.order.orderer, {'code': code, 'dividend': dividend}))
             orderbook.dividend_record[self.get_time()] = dividend
         
+    def change_value(self, code):
+        v = random.gauss(0, 0.5)
+        self.orderbooks[code].adjust_value(v)
+
     def check_volatility(self):
         for code, orderbook in self.orderbooks.items():
             if len(orderbook.steps_record['average']) < 2:
@@ -146,6 +150,9 @@ class Market:
 
     def get_transaction_rate(self):
         return self.transaction_rate
+
+    def get_risk_free_rate(self):
+        return self.interest_rate
 
     def get_securities(self):
         return list(self.orderbooks.keys())
@@ -196,7 +203,9 @@ class CallMarket(Market):
         self.orderbooks = {code: CallOrderBook(self, code, **value) for code, value in securities.items()}
 
     def step(self):
-        for orderbook in self.orderbooks.values():
+        # adjust value
+
+        for code, orderbook in self.orderbooks.items():
             if len(orderbook.bids_price) == 0 or len(orderbook.asks_price) == 0:
                 print("No quote")
             elif orderbook.bids_price[0] < orderbook.asks_price[0]:
@@ -206,11 +215,11 @@ class CallMarket(Market):
                 orderbook.fill_orders(match_price, max_match_volume)
                 orderbook.clear_orders()
                 orderbook.step_summarize()
+            self.change_value(code)
             
-
+        
         if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
-            # adjust value
             
     def market_stats(self):
         stats = {}

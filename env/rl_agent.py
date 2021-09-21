@@ -38,7 +38,7 @@ class BaseAgent:
         - origin: present wealth v.s. original wealth, % * 0.2
     '''    
 
-    def __init__(self, algorithm, observation_space, action_space, device, look_back, lr = 1e-4, batch_size = 32, buffer_size = 128):
+    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, lr = 1e-4, batch_size = 32, buffer_size = 128):
         if algorithm == 'ppo':
             self.rl = PPO(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
         elif algorithm == 'ac':
@@ -46,8 +46,11 @@ class BaseAgent:
         self.states = []
         self.device = device
         self.look_back = look_back
+        self.reward_weight = {'action': 0.5, 'wealth': 0.5}
+        self.timestep = 0
 
     def forward(self, state):
+        self.timestep += 1
         self.states.append(state)
         obs = self.obs_wrapper(state)
         obs_tensor = torch.from_numpy(obs).to(self.device)
@@ -89,6 +92,7 @@ class BaseAgent:
         price = price.flatten()
         volume = volume.flatten()
 
+
         # agent
         cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
         holdings = obs['agent']['TSMC'] / self.states[0]['agent']['TSMC']
@@ -98,6 +102,14 @@ class BaseAgent:
 
         # concat
         return np.concatenate([price, volume, agent_state])
+
+    def reward_dacay(self):
+        if self.reward_weight['action'] < 0.001:
+            return
+        decay_weight = 0.995 * self.reward_weight['action']
+        self.reward_weight['action'] -= decay_weight
+        self.reward_weight['wealth'] += decay_weight
+        
 
     def reward_wrapper(self, action, next_state, action_status):
         # action reward
@@ -131,8 +143,11 @@ class BaseAgent:
         base_change = (present_wealth - base_wealth) / base_wealth
 
         wealth_reward = wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
+        wealth_reward = wealth_reward * 2 / 1.5
+        weighted_reward = self.reward_weight['action'] * action_reward + self.reward_weight['wealth'] * wealth_reward
 
-        return action_reward, wealth_reward
+        self.reward_dacay()
+        return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'wealth_reward': wealth_reward}
 
     def final_reward(self):
         pass
@@ -143,8 +158,9 @@ class BaseAgent:
 
 
 class ValueAgent(BaseAgent):
-    def __init__(self, algorithm, observation_space, action_space, device, look_back, lr, batch_size, buffer_size):
+    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, lr = 1e-4, batch_size = 32, buffer_size = 128):
         super().__init__(algorithm, observation_space, action_space, device, look_back, lr=lr, batch_size=batch_size, buffer_size=buffer_size)
+        self.reward_weight = {'action': 0.4, 'strategy': 0.3, 'wealth': 0.3}
 
     def action_wrapper(self, action):
         return action
@@ -154,7 +170,8 @@ class ValueAgent(BaseAgent):
         price = obs['market']['price'][0] / obs['market']['price'][-1]
         volume = obs['market']['volume'][0] / obs['market']['volume'][-1]
         value = obs['market']['value'][0] / obs['market']['value'][-1]
-        market_state = np.array([price, volume, value], dtype = np.float32)
+        risk_free_rate = obs['market']['risk_free_rate']
+        market_state = np.array([price, volume, value, risk_free_rate], dtype = np.float32)
         
         # agent states
         cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
@@ -162,9 +179,70 @@ class ValueAgent(BaseAgent):
         wealth = obs['agent']['wealth'] / self.states[0]['agent']['wealth']
         agent_state = np.array([cash, holdings, wealth], np.float32)
         return np.concatenate([market_state, agent_state])
-    
+ 
+    def reward_dacay(self):
+        if self.reward_weight['action'] < 0.001:
+            return
+        decay_weight = 0.995 * self.reward_weight['action']
+
+        self.reward_weight['action'] -= decay_weight
+        self.reward_weight['strategy'] += 0.5 * decay_weight
+        self.reward_weight['wealth'] += 0.5 * decay_weight
+
     def reward_wrapper(self, action, next_state, action_status):
-        # the action should follow the value
+        # proper action reward
+        action_reward = 0
 
+        if action[0] == 0 or action[0] == 1:
+            # VALID_ACTION = 1, INVALID_ACTION = 2, HOLD = 0
+            if action_status == 1:
+                action_reward += 0.3
+            elif action_status == 2:
+                action_reward -= 0.2
+            
+        elif action[0] == 2:
+            action_reward -= 0.02
+        
+        # right portfolio to track the value
+        present_price = next_state['market']['price'][-1]
+        present_value = next_state['market']['value'][-1]
+        gap = (present_price - present_value) / present_price
+        stock_ratio = (next_state['agent']['TSMC'] * present_price) / next_state['agent']['wealth']
+        risk_free_rate = next_state['market']['risk_free_rate']
 
-        return super().reward_wrapper(action, next_state, action_status)
+        if gap > risk_free_rate:
+            # the price is overrated and the potential profit is enough to act
+            strategy_reward =  (0.5 - stock_ratio) * 2
+        elif gap < 0:
+            strategy_reward = stock_ratio - 0.2
+        else:
+            strategy_reward = 0.01
+
+        
+
+        # wealth reward
+        mid_steps = 50
+        long_steps = 200
+        wealth_weight = {'short': 0.15, 'mid': 0.35, 'long': 0.3, 'base': 0.2}
+        base_wealth = self.states[0]['agent']['wealth']
+        last_wealth = self.states[-1]['agent']['wealth']
+        present_wealth = next_state['agent']['wealth']
+        mid_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(mid_steps+1):-1]]
+        mid_wealth = sum(mid_wealths) / len(mid_wealths)
+        long_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(long_steps+1):-1]]
+        long_wealth = sum(long_wealths) / len(long_wealths)
+        
+        short_change = (present_wealth - last_wealth) / last_wealth
+        mid_change = (present_wealth - mid_wealth) / mid_wealth
+        long_change = (present_wealth - long_wealth) / long_wealth
+        base_change = (present_wealth - base_wealth) / base_wealth
+
+        wealth_reward = wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change
+        # 150% reward 1
+        wealth_reward = wealth_reward * 2 / 1.5
+
+        # weight sum
+        weighted_reward = self.reward_weight['action'] * action_reward + self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        self.reward_dacay()
+
+        return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
