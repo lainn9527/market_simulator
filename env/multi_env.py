@@ -1,13 +1,10 @@
 import random
 import numpy as np
-import gym
 import json
 import torch
 from core import agent
 from collections import defaultdict
 from typing import Dict, List
-from gym import spaces
-from gym.utils import seeding
 from datetime import datetime
 from pathlib import Path
 from copy import deepcopy
@@ -25,14 +22,21 @@ class MultiTradingEnv:
         self.group_name = []
 
     def seed(self, seed=None):
-        self.np_random, seed = seeding.np_random(seed)
-        return [seed]
+        np.random.seed(seed)
+        
 
     def reset(self, config):
         config = deepcopy(config)
-        config['Market']['Securities']['TSMC']['price'] = [ round(random.gauss(100, 1), 1) for i in range(100)]
-        config['Market']['Securities']['TSMC']['volume'] = [int(random.gauss(100, 10)*10) for i in range(100)]
-        config['Market']['Securities']['TSMC']['value'] = [round(random.gauss(100, 1), 1) for i in range(100)]
+        pre_value = [config['Market']['Securities']['TSMC']['value']]
+        pre_price = [config['Market']['Securities']['TSMC']['value']]
+        for i in range(99):
+            pre_value.append(pre_value[-1] + round(random.gauss(0, 0.5), 1))
+            pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
+        pre_volume = [int(random.gauss(100, 10)*10) for i in range(100)]
+        config['Market']['Securities']['TSMC']['value'] = pre_value
+        config['Market']['Securities']['TSMC']['price'] = pre_price
+        config['Market']['Securities']['TSMC']['volume'] = pre_volume
+
         self.core = Core(config, market_type="call")
         agent_ids = self.core.multi_env_start(987, self.group_name)
         self.agent_ids = agent_ids
