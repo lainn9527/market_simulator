@@ -38,39 +38,38 @@ class BaseAgent:
         - origin: present wealth v.s. original wealth, % * 0.2
     '''    
 
-    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, lr = 1e-4, batch_size = 32, buffer_size = 128):
+    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, actor_lr = 1e-3, value_lr = 3e-3, batch_size = 32, buffer_size = 45):
         if algorithm == 'ppo':
-            self.rl = PPO(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
+            self.rl = PPO(observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device).to(device)
         elif algorithm == 'ac':
-            self.rl = ActorCritic(observation_space, action_space, lr, batch_size, buffer_size, device).to(device)
-        self.states = []
-        self.device = device
+            self.rl = ActorCritic(observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device).to(device)
+        self.agent_states = []
         self.look_back = look_back
         self.reward_weight = {'action': 0.5, 'wealth': 0.5}
         self.timestep = 0
 
-    def forward(self, state):
+    def get_action(self, state):
         self.timestep += 1
-        self.states.append(state)
+        self.agent_states.append(state['agent'])
         obs = self.obs_wrapper(state)
-        obs_tensor = torch.from_numpy(obs).to(self.device)
-        action, log_prob = self.rl.forward(obs_tensor)
+        action, log_prob = self.rl.get_action(obs)
         action = self.action_wrapper(action)
-        return obs, np.array(action), log_prob.cpu().item()
+        return obs, action, log_prob
 
     def update(self, transition):
         self.rl.buffer.append(transition)
         if len(self.rl.buffer) % self.rl.buffer_size == 0 and len(self.rl.buffer) > 0:
-            self.rl.update()
+            return self.rl.update()
+        else:
+            return None
 
 
     def predict(self, state):
-        self.states.append(state)
+        self.agent_states.append(state['agent'])
         obs = self.obs_wrapper(state)
-        obs = torch.from_numpy(obs).to(self.device)
         action = self.rl.predict(obs)
         action = self.action_wrapper(action)
-        return np.array(action)
+        return action
 
 
     def calculate_reward(self, action, next_state, action_status):
@@ -85,18 +84,18 @@ class BaseAgent:
         # market
         price = np.array( [value for value in obs['market']['price'][:self.look_back]], dtype=np.float32)
         volume = np.array( [value for value in obs['market']['volume'][:self.look_back]], dtype=np.float32)
-        start_price = self.states[0]['market']['price'][0]
-        start_volume = self.states[0]['market']['volume'][0]
-        price = price / start_price
-        volume = volume / start_volume
+        price = price / price[0]
+        if volume[0] != 0:
+            volume = volume / volume[0]
+        else:
+            volume = volume / volume.mean()
         price = price.flatten()
         volume = volume.flatten()
 
-
         # agent
-        cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
-        holdings = obs['agent']['TSMC'] / self.states[0]['agent']['TSMC']
-        wealth = obs['agent']['wealth'] / self.states[0]['agent']['wealth']
+        cash = obs['agent']['cash'] / self.agent_states[0]['cash']
+        holdings = obs['agent']['TSMC'] / self.agent_states[0]['TSMC']
+        wealth = obs['agent']['wealth'] / self.agent_states[0]['wealth']
         agent_state = np.array([cash, holdings, wealth], np.float32)
         # use base price to normalize
 
@@ -130,11 +129,11 @@ class BaseAgent:
         long_steps = 200
         wealth_weight = {'short': 0.15, 'mid': 0.35, 'long': 0.3, 'base': 0.2}
         present_wealth = next_state['agent']['wealth']
-        base_wealth = self.states[0]['agent']['wealth']
-        last_wealth = self.states[-1]['agent']['wealth']
-        mid_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(mid_steps+1):-1]]
+        base_wealth = self.agent_states[0]['wealth']
+        last_wealth = self.agent_states[-1]['wealth']
+        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-1: -(mid_steps+1):-1]]
         mid_wealth = sum(mid_wealths) / len(mid_wealths)
-        long_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(long_steps+1):-1]]
+        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-1: -(long_steps+1):-1]]
         long_wealth = sum(long_wealths) / len(long_wealths)
         
         short_change = (present_wealth - last_wealth) / last_wealth
@@ -153,13 +152,13 @@ class BaseAgent:
         pass
 
     def end_episode(self):
-        del self.states[:]
+        del self.agent_states[:]
         del self.rl.buffer[:]
 
 
 class ValueAgent(BaseAgent):
-    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, lr = 1e-4, batch_size = 32, buffer_size = 128):
-        super().__init__(algorithm, observation_space, action_space, device, look_back, lr=lr, batch_size=batch_size, buffer_size=buffer_size)
+    def __init__(self, algorithm, observation_space, action_space, device, look_back = 1, actor_lr = 1e-3, value_lr = 3e-3, batch_size = 32, buffer_size = 45):
+        super().__init__(algorithm, observation_space, action_space, device, look_back, actor_lr=actor_lr, value_lr=value_lr, batch_size=batch_size, buffer_size=buffer_size)
         self.reward_weight = {'action': 0.4, 'strategy': 0.3, 'wealth': 0.3}
 
     def action_wrapper(self, action):
@@ -174,9 +173,9 @@ class ValueAgent(BaseAgent):
         market_state = np.array([price, volume, value, risk_free_rate], dtype = np.float32)
         
         # agent states
-        cash = obs['agent']['cash'] / self.states[0]['agent']['cash']
-        holdings = obs['agent']['TSMC'] / self.states[0]['agent']['TSMC']
-        wealth = obs['agent']['wealth'] / self.states[0]['agent']['wealth']
+        cash = obs['agent']['cash'] / self.agent_states[0]['cash']
+        holdings = obs['agent']['TSMC'] / self.agent_states[0]['TSMC']
+        wealth = obs['agent']['wealth'] / self.agent_states[0]['wealth']
         agent_state = np.array([cash, holdings, wealth], np.float32)
         return np.concatenate([market_state, agent_state])
  
@@ -224,12 +223,12 @@ class ValueAgent(BaseAgent):
         mid_steps = 50
         long_steps = 200
         wealth_weight = {'short': 0.15, 'mid': 0.35, 'long': 0.3, 'base': 0.2}
-        base_wealth = self.states[0]['agent']['wealth']
-        last_wealth = self.states[-1]['agent']['wealth']
         present_wealth = next_state['agent']['wealth']
-        mid_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(mid_steps+1):-1]]
+        base_wealth = self.agent_states[0]['wealth']
+        last_wealth = self.agent_states[-1]['wealth']
+        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-1: -(mid_steps+1):-1]]
         mid_wealth = sum(mid_wealths) / len(mid_wealths)
-        long_wealths = [present_wealth] + [state['agent']['wealth'] for state in self.states[-1: -(long_steps+1):-1]]
+        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-1: -(long_steps+1):-1]]
         long_wealth = sum(long_wealths) / len(long_wealths)
         
         short_change = (present_wealth - last_wealth) / last_wealth
@@ -246,3 +245,4 @@ class ValueAgent(BaseAgent):
         self.reward_dacay()
 
         return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+ 

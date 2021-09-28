@@ -15,9 +15,8 @@ from core.utils import write_multi_records
 from core.core import Core
 from env.rl_agent import BaseAgent
 from env.multi_env import MultiTradingEnv
-Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state'])
 
-
+Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state', 'done'])
 def train_model(train_config: Dict, env_config: Dict):
     if not train_config['result_dir'].exists():
         train_config['result_dir'].mkdir()
@@ -27,10 +26,23 @@ def train_model(train_config: Dict, env_config: Dict):
     np.random.seed(random_seed)
     random.seed(random_seed)
 
+    # check if resume
+    if train_config['resume']:
+        resume_config_path = train_config['resume_model_dir'] / 'config.json'
+        env_config = json.loads(resume_config_path.read_text())
+
     # init training env
     multi_env = MultiTradingEnv()
     rl_agent_config = env_config['Agent']['RLAgent']
-    agents = multi_env.build_agents(rl_agent_config, train_config['lr'], train_config['device'], train_config['resume'], train_config['resume_model_dir'])
+    agents = multi_env.build_agents(rl_agent_config,
+                                    train_config['actor_lr'],
+                                    train_config['value_lr'],
+                                    train_config['batch_size'],
+                                    train_config['buffer_size'],
+                                    train_config['device'],
+                                    train_config['resume'],
+                                    train_config['resume_model_dir']
+                                )
         
 
     # record the observation spaces of agents
@@ -46,32 +58,42 @@ def train_model(train_config: Dict, env_config: Dict):
         for t in range(n_epochs):
             print(f"Epoch {t} start")
             agent_ids, states = multi_env.reset(env_config)
-            rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
+            rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': [], 'policy_loss': [], 'value_loss': []} for agent_id in agent_ids}
 
             for i in range(n_steps):
                 # collect actions
                 obs, actions, log_probs, rewards = {}, {}, {}, {}
                 for agent_id, agent in zip(agent_ids, agents):
-                    obs[agent_id], actions[agent_id], log_probs[agent_id] = agent.forward(states[agent_id])
+                    obs[agent_id], actions[agent_id], log_probs[agent_id] = agent.get_action(states[agent_id])
 
                 # rewards, next_steps
-                rewards, next_states, next_obs = multi_env.step(actions)
+                done, rewards, next_states, next_obs = multi_env.step(actions)
 
                 for agent_id, agent in zip(agent_ids, agents):
-                    agent.update(Transition(obs[agent_id], actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id]))
+                    loss = agent.update(Transition(obs[agent_id],actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id], done))
 
-                    # log                
+                    # log
                     rl_records[agent_id]['states'].append(states[agent_id]['agent'])
-                    rl_records[agent_id]['actions'].append(actions[agent_id].tolist())
+                    rl_records[agent_id]['actions'].append(actions[agent_id])
                     rl_records[agent_id]['rewards'].append(rewards[agent_id])
+                    
+                    if loss != None:
+                        rl_records[agent_id]['policy_loss'].append(loss['policy_loss'])
+                        rl_records[agent_id]['value_loss'].append(loss['value_loss'])
                 
                 states = next_states
                 if i % 10 == 0:
                     multi_env.render(i)
+                
+                if done:
+                    multi_env.render(i)
+                    print(f"No quote. End of this episode")
+                    break
             
             for agent_id, agent in zip(agent_ids, agents):
                 agent.end_episode()
 
+            # log
             orderbooks, agent_manager = multi_env.close()
             training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
             write_multi_records(training_record, train_output_dir / f'sim_{t}')    
@@ -105,16 +127,21 @@ def train_model(train_config: Dict, env_config: Dict):
                     actions[agent_id] = agent.predict(states[agent_id])
 
                 # rewards, next_steps
-                rewards, next_states, next_obs = multi_env.step(actions)
+                done, rewards, next_states, next_obs = multi_env.step(actions)
 
                 for agent_id, agent in zip(agent_ids, agents):
                     # log                
                     rl_records[agent_id]['states'].append(states[agent_id]['agent'])
-                    rl_records[agent_id]['actions'].append(actions[agent_id].tolist())
+                    rl_records[agent_id]['actions'].append(actions[agent_id])
                 
                 states = next_states
                 if i % 10 == 0:
                     multi_env.render(i)
+
+                if done:
+                    multi_env.render(i)
+                    print(f"No quote. End of this episode")
+                    break    
             
             for agent_id, agent in zip(agent_ids, agents):
                 agent.end_episode()
@@ -132,19 +159,21 @@ def train_model(train_config: Dict, env_config: Dict):
 
 if __name__=='__main__':
     model_config = {
-        'config_path': Path("config/multi.json"),
-        'result_dir': Path("simulation_result/multi/all_100/"),
+        'config_path': Path("config/value.json"),
+        'result_dir': Path("simulation_result/multi/test/"),
         'resume': False,
-        'resume_model_dir': Path("simulation_result/multi/ppo_rl_500/"),
+        'resume_model_dir': Path("simulation_result/multi/price_500/"),
         'train': True,
-        'train_epochs': 8,
+        'train_epochs': 10,
         'train_steps': 2500,
-        'batch_size': 32,
-        'lr': 1e-4,
-        'device': 'cuda',
         'validate': True,
-        'validate_epochs': 2,
-        'validate_steps': 500,
+        'validate_epochs': 10,
+        'validate_steps': 2500,
+        'actor_lr': 1e-3,
+        'value_lr': 3e-3,
+        'batch_size': 32,
+        'buffer_size': 45,
+        'device': 'cpu',
     }
     # 4:30 h = 270min = 16200s
     if not model_config['result_dir'].exists():

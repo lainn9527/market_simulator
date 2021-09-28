@@ -106,7 +106,7 @@ class Market:
             orderbook.dividend_record[self.get_time()] = dividend
         
     def change_value(self, code):
-        v = random.gauss(0, 0.5)
+        v = random.gauss(0, 0.1)
         self.orderbooks[code].adjust_value(v)
 
     def check_volatility(self):
@@ -204,23 +204,26 @@ class CallMarket(Market):
 
     def step(self):
         # adjust value
-
         for code, orderbook in self.orderbooks.items():
-            if len(orderbook.bids_price) == 0 or len(orderbook.asks_price) == 0:
-                print("No quote")
-            elif orderbook.bids_price[0] < orderbook.asks_price[0]:
-                print("No match")
+            if len(orderbook.bids_price) == 0 or len(orderbook.asks_price) == 0 or orderbook.bids_price[0] < orderbook.asks_price[0]:
+                updated_info = orderbook.handle_no_match()
+                done = True
             else:
                 match_price, max_match_volume = orderbook.match_order()
-                orderbook.fill_orders(match_price, max_match_volume)
-                orderbook.clear_orders()
-                orderbook.step_summarize()
+                updated_info = orderbook.fill_orders(match_price, max_match_volume)
+                done = False
+            
+            orderbook.update_record(**updated_info)
+            orderbook.clear_orders()
+            orderbook.step_summarize()
             self.change_value(code)
             
         
         if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
-            
+        
+        return done
+
     def market_stats(self):
         stats = {}
         for code, orderbook in self.orderbooks.items():

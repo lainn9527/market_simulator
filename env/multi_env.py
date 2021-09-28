@@ -45,12 +45,12 @@ class MultiTradingEnv:
         return agent_ids, init_states
 
     def step(self, actions):
-        self.core.multi_env_step(actions)
+        done = self.core.multi_env_step(actions)
         next_states = self.get_states()
         next_obs = self.get_obses(next_states)
         rewards = self.get_rewards(actions, next_states)
 
-        return rewards, next_states, next_obs
+        return done, rewards, next_states, next_obs
 
     def close(self):
         orderbooks, agent_manager = self.core.multi_env_close()
@@ -64,24 +64,27 @@ class MultiTradingEnv:
     def render(self, timestep):
         print(f"At: {timestep}, the market state is:\n{self.core.show_market_state()}")
 
-    def build_agents(self, agent_config, lr, device, resume, resume_model_dir = None):
+    def build_agents(self,
+                     agent_config,
+                     actor_lr,
+                     value_lr,
+                     batch_size,
+                     buffer_size,
+                     device,
+                     resume,
+                     resume_model_dir = None):
 
         device = torch.device(device)
-
         # build
-        if resume:
-            resume_config_path = resume_model_dir / 'config.json'
-            resume_model_path = resume_model_dir / 'model.pkl'
-            resume_config = json.loads(resume_config_path.read_text())
-            agent_config = resume_config['Agent']['RLAgent']
         
         group_name, agents = [], []
         for config in agent_config:
-            name, agent = self.build_agent(lr, device, config)
+            name, agent = self.build_agent(actor_lr, value_lr, batch_size, buffer_size, device, config)
             agents += agent
             group_name.append(name)
         
         if resume:
+            resume_model_path = resume_model_dir / 'model.pkl'
             checkpoint = torch.load(resume_model_path)
             for i, agent in enumerate(agents):
                 agent.rl.load_state_dict(checkpoint[f"base_{i}"])
@@ -94,7 +97,7 @@ class MultiTradingEnv:
         
         return agents
 
-    def build_agent(self, lr, device, config):
+    def build_agent(self, actor_lr, value_lr, batch_size, buffer_size, device, config):
         agent_type = config['type']
         n_agent = config['number']
         algorithm = config['algorithm']
@@ -115,7 +118,10 @@ class MultiTradingEnv:
                                         action_space = action_spaces[i],
                                         device = device,
                                         look_back = look_backs[i], 
-                                        lr = lr)
+                                        actor_lr = actor_lr,
+                                        value_lr = value_lr,
+                                        batch_size = batch_size,
+                                        buffer_size = buffer_size)
                 agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs
@@ -127,7 +133,12 @@ class MultiTradingEnv:
                                         observation_space = observation_spaces[i],
                                         action_space = action_spaces[i],
                                         device = device,
-                                        lr = lr)
+                                        actor_lr = actor_lr,
+                                        value_lr = value_lr,
+                                        batch_size = batch_size,
+                                        buffer_size = buffer_size
+                                    )
+
                 agents.append(trend_agent)
         
         return group_name, agents

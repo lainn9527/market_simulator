@@ -147,12 +147,13 @@ class Core:
         return agent_ids
 
 
-    def multi_env_step(self, actions):
-        
+    def multi_env_step(self, actions): 
         self.agent_manager.multi_env_step(actions)
         self.handle_messages()
-        self.market.step()
+        done = self.market.step()
         self.timestep += 1
+        
+        return done
 
     def multi_env_close(self):
         return self.market.orderbooks, self.agent_manager

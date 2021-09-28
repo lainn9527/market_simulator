@@ -510,14 +510,6 @@ class CallOrderBook(OrderBook):
         self.quote_ask_order(order_id)
 
     def match_order(self):
-        # locate the best bid at asks
-        if len(self.bids_price) == 0 or len(self.asks_price) == 0:
-            print("No quote")
-            return
-        elif self.bids_price[0] < self.asks_price[0]:
-            print("No match")
-            return
-
         # construct accumulated volume of bids and asksㄋ
         accum_bid_volume = self.bids_volume.copy()
         accum_ask_volume = self.asks_volume.copy()
@@ -568,7 +560,6 @@ class CallOrderBook(OrderBook):
     
     def fill_orders(self, match_price, match_volume):
         # fill the orders
-        last_price_quantity = min(self.bids_volume[match_price], self.asks_volume[match_price])
 
         last_bid_remain = match_volume
         for bid_price in self.bids_price:
@@ -598,7 +589,16 @@ class CallOrderBook(OrderBook):
                         'amount': round(match_price * match_volume, 2),
                         'bid': self.bids_sum,
                         'ask': self.asks_sum,}
-        self.update_record(**updated_info)
+        
+        return updated_info
+
+    def handle_no_match(self):
+        updated_info = {'volume': 0,
+                        'amount': 0,
+                        'bid': self.bids_sum,
+                        'ask': self.asks_sum,}
+        
+        return updated_info
 
     def clear_orders(self):
         for order_id in self.current_orders[:]:
