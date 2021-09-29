@@ -29,10 +29,11 @@ class MultiTradingEnv:
         config = deepcopy(config)
         pre_value = [config['Market']['Securities']['TSMC']['value']]
         pre_price = [config['Market']['Securities']['TSMC']['value']]
-        for i in range(99):
+        for i in range(249):
             pre_value.append(pre_value[-1] + round(random.gauss(0, 0.5), 1))
             pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
-        pre_volume = [int(random.gauss(100, 10)*10) for i in range(100)]
+            
+        pre_volume = [int(random.gauss(100, 10)*10) for i in range(249)]
         config['Market']['Securities']['TSMC']['value'] = pre_value
         config['Market']['Securities']['TSMC']['price'] = pre_price
         config['Market']['Securities']['TSMC']['volume'] = pre_volume
@@ -103,6 +104,9 @@ class MultiTradingEnv:
         algorithm = config['algorithm']
         group_name = f"{config['name']}_{config['number']}"
         agents = []
+        min_batch_size = 20
+        min_buffer_size = 32
+
         if agent_type == "trend":
             if 'look_backs' in config.keys():
                 look_backs = config['look_backs']
@@ -113,7 +117,11 @@ class MultiTradingEnv:
             action_spaces = [(3, 9, 5) for i in range(n_agent)]
             observation_spaces = [look_backs[i]*2 + 3 for i in range(n_agent)]
 
+            # hard code batch size & buffer size
             for i in range(n_agent):
+                buffer_size = max(min_buffer_size, look_backs[i])
+                batch_size = random.randint(min_batch_size, buffer_size)
+                n_epoch =  round(14 / (buffer_size / batch_size))
                 trend_agent = BaseAgent(algorithm = algorithm,
                                         observation_space = observation_spaces[i],
                                         action_space = action_spaces[i],
@@ -122,7 +130,8 @@ class MultiTradingEnv:
                                         actor_lr = actor_lr,
                                         value_lr = value_lr,
                                         batch_size = batch_size,
-                                        buffer_size = buffer_size
+                                        buffer_size = buffer_size,
+                                        n_epoch = n_epoch
                                     )
                 agents.append(trend_agent)
             # record
@@ -131,17 +140,21 @@ class MultiTradingEnv:
             action_spaces = [(3, 9, 5) for i in range(n_agent)]
             observation_spaces = [7 for i in range(n_agent)]
             for i in range(n_agent):
-                trend_agent = ValueAgent(algorithm = algorithm,
+                buffer_size = max(min_batch_size, 250)
+                batch_size = random.randint(min_batch_size, buffer_size)
+                n_epoch =  round(14 / (buffer_size / batch_size))
+                value_agent = ValueAgent(algorithm = algorithm,
                                         observation_space = observation_spaces[i],
                                         action_space = action_spaces[i],
                                         device = device,
                                         actor_lr = actor_lr,
                                         value_lr = value_lr,
                                         batch_size = batch_size,
-                                        buffer_size = buffer_size
+                                        buffer_size = buffer_size,
+                                        n_epoch = n_epoch
                                     )
 
-                agents.append(trend_agent)
+                agents.append(value_agent)
         
         return group_name, agents
 

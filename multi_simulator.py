@@ -159,8 +159,8 @@ def train_model(train_config: Dict, env_config: Dict):
 
 if __name__=='__main__':
     model_config = {
-        'config_path': Path("config/price.json"),
-        'result_dir': Path("simulation_result/multi/price_100/"),
+        'config_path': Path("config/all_250.json"),
+        'result_dir': Path("simulation_result/multi/all_250_new_reward/"),
         'resume': False,
         'resume_model_dir': Path("simulation_result/multi/price_500/"),
         'train': True,

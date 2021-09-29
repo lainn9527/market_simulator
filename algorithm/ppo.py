@@ -10,7 +10,7 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from time import perf_counter
 from datetime import timedelta
 class PPO(nn.Module):
-    def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device):
+    def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device, n_epoch):
         super(PPO, self).__init__()
         self.action_space = action_space
         total_action_size = sum(action_space)
@@ -30,6 +30,7 @@ class PPO(nn.Module):
         self.buffer = []
         self.buffer_size = buffer_size
         self.batch_size = batch_size
+        self.n_epoch = n_epoch
         self.device = device
         self.gamma = 0.99
         self.clip_range = 0.2
@@ -73,7 +74,6 @@ class PPO(nn.Module):
         return batch
 
     def update(self):
-        start_time = perf_counter()
         states, rewards, next_states, dones = self.get_buffer_data()
         values = self.value_layer(states).detach().squeeze()
         
@@ -89,7 +89,7 @@ class PPO(nn.Module):
             returns.insert(0, discounted_reward)
         returns = torch.stack(returns, dim = 0)
 
-        for _ in range(10):
+        for _ in range(self.n_epoch):
             for batch_index in BatchSampler(SubsetRandomSampler(range(len(self.buffer))), self.batch_size, False):
                 batch_states, batch_actions, old_log_probs = self.get_mini_batch(batch_index)
                 batch_returns = returns[batch_index]
@@ -139,8 +139,6 @@ class PPO(nn.Module):
                 # self.value_optimizer.step()
                 self.training_step += 1
 
-        cost_time = str(timedelta(seconds = perf_counter() - start_time))        
-        print(f"Run in {cost_time}.")
         # clear data
         del self.buffer[:]
         loss = {'policy_loss': policy_loss.item(), 'value_loss': value_loss.item()}
