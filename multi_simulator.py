@@ -159,8 +159,8 @@ def train_model(train_config: Dict, env_config: Dict):
 
 if __name__=='__main__':
     model_config = {
-        'config_path': Path("config/value.json"),
-        'result_dir': Path("simulation_result/multi/test/"),
+        'config_path': Path("config/price.json"),
+        'result_dir': Path("simulation_result/multi/price_100/"),
         'resume': False,
         'resume_model_dir': Path("simulation_result/multi/price_500/"),
         'train': True,
@@ -182,7 +182,6 @@ if __name__=='__main__':
 
     start_time = perf_counter()
     env_config = json.loads(model_config['config_path'].read_text())
-    # env_config['Agent']['RLAgent'][0]['number'] = 100
     train_model(model_config, env_config)
     
 

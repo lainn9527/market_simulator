@@ -112,6 +112,7 @@ class MultiTradingEnv:
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
             action_spaces = [(3, 9, 5) for i in range(n_agent)]
             observation_spaces = [look_backs[i]*2 + 3 for i in range(n_agent)]
+
             for i in range(n_agent):
                 trend_agent = BaseAgent(algorithm = algorithm,
                                         observation_space = observation_spaces[i],
@@ -121,7 +122,8 @@ class MultiTradingEnv:
                                         actor_lr = actor_lr,
                                         value_lr = value_lr,
                                         batch_size = batch_size,
-                                        buffer_size = buffer_size)
+                                        buffer_size = buffer_size
+                                    )
                 agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs

@@ -304,5 +304,7 @@ class AgentManager:
             return "pr"
         elif _type == "RLAgent":
             return "rl"
+        elif _type == "ScalingAgent":
+            return "sc"
         else:
             raise Exception(f"No {_type} agent")

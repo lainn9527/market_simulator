@@ -37,13 +37,23 @@
                 "name": "ppo_tr",
                 "type": "trend",
                 "algorithm": "ppo",
-                "number": 100,
+                "number": 250,
                 "cash": 10000,
                 "securities": {
                     "TSMC": 1
                 },
                 "min_look_back": 2,
                 "max_look_back": 100
+            },
+            {
+                "name": "ppo_va",
+                "type": "value",
+                "algorithm": "ppo",
+                "number": 250,
+                "cash": 10000,
+                "securities": {
+                    "TSMC": 1
+                }
             }
         ]
     },

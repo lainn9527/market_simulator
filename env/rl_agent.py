@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from algorithm.actor_critic import ActorCritic
-from algorithm.ppo import PPO
+from algorithm.ppo_rnn import PPO
 
 class BaseAgent:
     '''
@@ -101,6 +101,7 @@ class BaseAgent:
 
         # concat
         return np.concatenate([price, volume, agent_state])
+        # return {'pv': np.stack([price, volume]), 'agent_state': agent_state}
 
     def reward_dacay(self):
         if self.reward_weight['action'] < 0.001:
@@ -154,6 +155,7 @@ class BaseAgent:
     def end_episode(self):
         del self.agent_states[:]
         del self.rl.buffer[:]
+
 
 
 class ValueAgent(BaseAgent):
@@ -245,4 +247,6 @@ class ValueAgent(BaseAgent):
         self.reward_dacay()
 
         return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+ 
+
  
