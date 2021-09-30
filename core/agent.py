@@ -263,8 +263,8 @@ class Agent:
         cash = self.cash + self.reserved_cash
         securities_value = 0
         for code in self.holdings.keys():
-            average_price = self.core.get_records(code, 'average', step = 1)[0] if self.get_time() > 0 else self.core.get_current_price(code)
-            securities_value +=  average_price * (self.holdings[code] + self.reserved_holdings[code]) * self.core.get_stock_size() 
+            price = self.core.get_current_price(code)
+            securities_value +=  price * (self.holdings[code] + self.reserved_holdings[code]) * self.core.get_stock_size() 
         self.wealth = cash + securities_value
 
     def get_time(self):
@@ -409,7 +409,7 @@ class ScalingAgent(Agent):
 
         elif original_group == 'pessimistic':
             pes_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_22)
-
+        
 
     def generate_order(self):
         risk_free_rate = self.core.get_risk_free_rate()

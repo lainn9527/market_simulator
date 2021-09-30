@@ -161,13 +161,32 @@ class MultiTradingEnv:
         
     def get_states(self):
         states = {}
+        market_state = self.get_market_state()
         for agent_id, agent in zip(self.agent_ids, self.agents):
-            states[agent_id] = self.get_state(agent_id)
+            agent_state = self.get_agent_state(agent_id)
+            states[agent_id] = {'market': market_state, 'agent': agent_state}
 
         return states
 
+    def get_market_state(self):
+        market_stats = self.core.get_call_env_state(lookback = 99999, from_last = False)
+        market = {
+            'price': market_stats['price'],
+            'volume': market_stats['volume'],
+            'value': market_stats['value'],
+            'risk_free_rate': market_stats['risk_free_rate'],
+        }
+        return market
+
+    def get_agent_state(self, agent_id):
+        agent_state = {'cash': self.core.agent_manager.agents[agent_id].cash,
+                    'TSMC': self.core.agent_manager.agents[agent_id].holdings['TSMC'],
+                    'wealth': self.core.agent_manager.agents[agent_id].wealth,}
+        
+        return agent_state
+
     def get_state(self, agent_id):
-        market_stats = self.core.get_call_env_state(lookback = 99999, from_last = True)
+        market_stats = self.core.get_call_env_state(lookback = 99999, from_last = False)
         market = {
             'price': market_stats['price'],
             'volume': market_stats['volume'],

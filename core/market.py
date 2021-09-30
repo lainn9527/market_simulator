@@ -1,4 +1,5 @@
 import random
+import math
 from datetime import time, timedelta
 
 from numpy.lib import type_check
@@ -106,8 +107,10 @@ class Market:
             orderbook.dividend_record[self.get_time()] = dividend
         
     def change_value(self, code):
-        v = random.gauss(0, 0.1)
-        self.orderbooks[code].adjust_value(v)
+        v = random.gauss(0, 0.005)
+        previous_value = self.get_value(code)
+        current_value = math.exp(math.log(previous_value) + v)
+        self.orderbooks[code].adjust_value(current_value)
 
     def check_volatility(self):
         for code, orderbook in self.orderbooks.items():

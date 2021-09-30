@@ -14,6 +14,7 @@ class PPO(nn.Module):
         super(PPO, self).__init__()
         self.action_space = action_space
         total_action_size = sum(action_space)
+        hidden_layer_size = observation_space
         self.action_layer = nn.Sequential(
                               nn.Linear(observation_space, 64),
                               nn.Tanh(),
@@ -89,6 +90,8 @@ class PPO(nn.Module):
             returns.insert(0, discounted_reward)
         returns = torch.stack(returns, dim = 0)
 
+        policy_losses = []
+        value_losses = []
         for _ in range(self.n_epoch):
             for batch_index in BatchSampler(SubsetRandomSampler(range(len(self.buffer))), self.batch_size, False):
                 batch_states, batch_actions, old_log_probs = self.get_mini_batch(batch_index)
@@ -138,10 +141,13 @@ class PPO(nn.Module):
                 # self.actor_optimizer.step()
                 # self.value_optimizer.step()
                 self.training_step += 1
+                policy_losses.append(policy_loss.item())
+                value_losses.append(value_loss.item())
+
 
         # clear data
         del self.buffer[:]
-        loss = {'policy_loss': policy_loss.item(), 'value_loss': value_loss.item()}
+        loss = {'policy_loss': policy_losses, 'value_loss': value_losses}
         return loss
 
 

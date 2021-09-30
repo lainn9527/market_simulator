@@ -605,7 +605,7 @@ class CallOrderBook(OrderBook):
             self.cancel_order(order_id)
 
     def adjust_value(self, v):
-        self.current_record['value'] += v
+        self.current_record['value'] = v
     
     def update_record(self, **name_val):
         self.current_record.update(name_val)

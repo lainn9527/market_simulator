@@ -78,8 +78,8 @@ def train_model(train_config: Dict, env_config: Dict):
                     rl_records[agent_id]['rewards'].append(rewards[agent_id])
                     
                     if loss != None:
-                        rl_records[agent_id]['policy_loss'].append(loss['policy_loss'])
-                        rl_records[agent_id]['value_loss'].append(loss['value_loss'])
+                        rl_records[agent_id]['policy_loss'] += loss['policy_loss']
+                        rl_records[agent_id]['value_loss'] += loss['value_loss']
                 
                 states = next_states
                 if i % 10 == 0:
@@ -159,8 +159,8 @@ def train_model(train_config: Dict, env_config: Dict):
 
 if __name__=='__main__':
     model_config = {
-        'config_path': Path("config/all_250.json"),
-        'result_dir': Path("simulation_result/multi/all_250_new_reward/"),
+        'config_path': Path("config/all_100.json"),
+        'result_dir': Path("simulation_result/multi/all_100/"),
         'resume': False,
         'resume_model_dir': Path("simulation_result/multi/price_500/"),
         'train': True,
