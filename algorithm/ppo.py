@@ -7,23 +7,21 @@ from torch.distributions import Categorical
 from torch.optim import Adam
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from time import perf_counter
-from datetime import timedelta
 class PPO(nn.Module):
     def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device, n_epoch):
         super(PPO, self).__init__()
         self.action_space = action_space
         total_action_size = sum(action_space)
-        hidden_layer_size = observation_space
+        hidden_layer_size = 108
         self.action_layer = nn.Sequential(
-                              nn.Linear(observation_space, 64),
+                              nn.Linear(observation_space, hidden_layer_size),
                               nn.Tanh(),
-                              nn.Linear(64, total_action_size),
+                              nn.Linear(hidden_layer_size, total_action_size),
                           )
         self.value_layer = nn.Sequential(
-                            nn.Linear(observation_space, 64),
+                            nn.Linear(observation_space, hidden_layer_size),
                             nn.Tanh(),
-                            nn.Linear(64, 1)
+                            nn.Linear(hidden_layer_size, 1)
                         )
         self.actor_optimizer = Adam(self.action_layer.parameters(), actor_lr)
         self.value_optimizer = Adam(self.value_layer.parameters(), value_lr)

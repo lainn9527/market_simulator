@@ -81,31 +81,30 @@ class BaseAgent:
         return action
 
     def obs_wrapper(self, obs):
+        # Observation space: 6
         # market
-        price = np.array( [value for value in obs['market']['price'][-self.look_back:]], dtype=np.float32)
-        volume = np.array( [value for value in obs['market']['volume'][-self.look_back:]], dtype=np.float32)
-        
-        current_price = price[-1]
-        ma = price.mean()
-        gap = (current_price - ma) / current_price / len(price)
-        mean_volume = volume.mean().item()
-        
 
-        # base_price = obs['market']['price'][0]
-        # price = price / base_price
-        # base_volume = obs['market']['volume'][0]
-        # volume = volume / base_volume
-        # price = price.flatten()
-        # volume = volume.flatten()
+        # price = np.array( [value for value in obs['market']['price'][-self.look_back:]], dtype=np.float32)
+        # volume = np.array( [value for value in obs['market']['volume'][-self.look_back:]], dtype=np.float32)
+        current_price = obs['market']['price'][-1]
+        current_volume = obs['market']['volume'][-1]
+        previous_price = obs['market']['price'][-self.look_back]
+        base_price = obs['market']['price'][0]
+        base_volume = obs['market']['volume'][0]
+
+        gap = (current_price - previous_price) / current_price / self.look_back
+        current_price = current_price / base_price
+        current_volume = current_volume / base_volume
+        # market_state = [gap, current_price, current_volume]
 
         # agent
         cash = obs['agent']['cash'] / self.agent_states[0]['cash']
         holdings = obs['agent']['TSMC'] / self.agent_states[0]['TSMC']
         wealth = obs['agent']['wealth'] / self.agent_states[0]['wealth']
-        agent_state = np.array([cash, holdings, wealth], np.float32)
+        # agent_state = np.array([gap, current_price, current_volume, cash, holdings, wealth], np.float32)
 
         # concat
-        return np.concatenate([price, volume, agent_state])
+        return np.array([gap, current_price, current_volume, cash, holdings, wealth], np.float32)
         # return {'pv': np.stack([price, volume]), 'agent_state': agent_state}
 
     def reward_dacay(self, decay_rate, strategy_weight, wealth_weight):
@@ -135,9 +134,17 @@ class BaseAgent:
         action_reward = self.reward_weight['action'] * action_reward
         
         # strategy reward
+        min_look_back = 2
+        stock_size = 100
+        current_price = next_state['market']['price'][-1]
+        previous_price = next_state['market']['price'][-self.look_back]
+        
+        # gap: [-0.5, 0.5] / look_back, stock_ratio [0, 1]
+        gap = (current_price - previous_price) / current_price
+        stock_ratio = (next_state['agent']['TSMC'] * current_price * stock_size) / next_state['agent']['wealth']
+        strategy_reward = 20 * (gap * stock_ratio)
 
-
-
+        
         # wealth reward
         risk_free_rate = next_state['market']['risk_free_rate']
         short_steps = 20
@@ -163,8 +170,8 @@ class BaseAgent:
         wealth_reward = self.reward_weight['wealth'] * 10 * (wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change)
         weighted_reward = action_reward + wealth_reward
 
-        self.reward_dacay(decay_rate = 0.9, strategy_weight = 0, wealth_weight = 1)
-        return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'wealth_reward': wealth_reward}
+        self.reward_dacay(decay_rate = 0.9, strategy_weight = 0.7, wealth_weight = 0.3)
+        return {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'action_reward': action_reward, 'wealth_reward': wealth_reward}
 
     def final_reward(self):
         pass
@@ -230,7 +237,7 @@ class ValueAgent(BaseAgent):
         stock_ratio = (next_state['agent']['TSMC'] * present_price * stock_size) / next_state['agent']['wealth']
         risk_free_rate = next_state['market']['risk_free_rate']
 
-        # holdings [0, 1], gap [-0.5, 0.5]
+        # stock_ratio [0, 1], gap [-0.5, 0.5]
         # reward 20 * [-0.5, 0.5] = [-10, 10]
         strategy_reward = 20 * (-gap * stock_ratio)
 
@@ -263,6 +270,3 @@ class ValueAgent(BaseAgent):
         self.reward_dacay(decay_rate = 0.9, strategy_weight = 0.7, wealth_weight = 0.3)
 
         return {'weighted_reward': weighted_reward, 'action_reward': action_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
- 
-
- 

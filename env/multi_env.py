@@ -115,7 +115,7 @@ class MultiTradingEnv:
                 max_look_back = config['max_look_back']
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
             action_spaces = [(3, 9, 5) for i in range(n_agent)]
-            observation_spaces = [look_backs[i]*2 + 3 for i in range(n_agent)]
+            observation_spaces = [3 + 3 for i in range(n_agent)]
 
             # hard code batch size & buffer size
             for i in range(n_agent):
