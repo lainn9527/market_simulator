@@ -32,12 +32,18 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    config_path = Path("config/call.json")
+    config_path = Path("config/scaling.json")
     config = json.loads(config_path.read_text())
-    config['Market']['Securities']['TSMC']['price'] = [random.gauss(100, 10) for i in range(100)]
-    config['Market']['Securities']['TSMC']['volume'] = [int(random.gauss(100, 10)*10) for i in range(100)]
-    config['Market']['Securities']['TSMC']['value'] = [random.gauss(100, 10) for i in range(100)]
+    pre_value = [config['Market']['Securities']['TSMC']['value']]
+    pre_price = [config['Market']['Securities']['TSMC']['value']]
+    for i in range(249):
+        pre_value.append(pre_value[-1] + round(random.gauss(0, 0.5), 1))
+        pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
+    pre_volume = [int(random.gauss(100, 10)*10) for i in range(249)]
 
+    config['Market']['Securities']['TSMC']['value'] = pre_value
+    config['Market']['Securities']['TSMC']['price'] = pre_price
+    config['Market']['Securities']['TSMC']['volume'] = pre_volume
     experiment_name = 'call'
     result_dir = Path("result") / experiment_name
-    simulate(result_dir / 'test', 1000, config, random_seed=9528)
+    simulate(result_dir / 'test', 2500, config, random_seed=9528)

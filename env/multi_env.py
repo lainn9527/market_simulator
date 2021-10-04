@@ -1,17 +1,11 @@
 import random
 import numpy as np
-import json
 import torch
-from core import agent
-from collections import defaultdict
-from typing import Dict, List
-from datetime import datetime
-from pathlib import Path
+import math
 from copy import deepcopy
 from core.core import Core
-from .rl_agent import BaseAgent, ValueAgent
-
-
+from .rl_agent import BaseAgent, ValueAgent, ScalingAgent
+from core import agent
 
 class MultiTradingEnv:
 
@@ -29,10 +23,11 @@ class MultiTradingEnv:
         config = deepcopy(config)
         pre_value = [config['Market']['Securities']['TSMC']['value']]
         pre_price = [config['Market']['Securities']['TSMC']['value']]
+
         for i in range(249):
-            pre_value.append(pre_value[-1] + round(random.gauss(0, 0.5), 1))
+            pre_value.append(round(math.exp(math.log(pre_value[-1]) + random.gauss(0, 0.005)), 1))
             pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
-            
+        
         pre_volume = [int(random.gauss(100, 10)*10) for i in range(249)]
         config['Market']['Securities']['TSMC']['value'] = pre_value
         config['Market']['Securities']['TSMC']['price'] = pre_price
@@ -91,7 +86,7 @@ class MultiTradingEnv:
                 agent.rl.load_state_dict(checkpoint[f"base_{i}"])
             print(f"Resume {len(agents)} rl agents from {resume_model_path}.")
         else:
-            print(f"Initiate {len(agents)} rl agents.")
+            print(f"Initiate {len(agents)} rl agents")
 
         self.agents = agents
         self.group_name = group_name
@@ -114,8 +109,8 @@ class MultiTradingEnv:
                 min_look_back = config['min_look_back']
                 max_look_back = config['max_look_back']
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
-            action_spaces = [(3, 9, 5) for i in range(n_agent)]
-            observation_spaces = [3 + 3 for i in range(n_agent)]
+            action_spaces = [(3) for i in range(n_agent)]
+            observation_spaces = [3 for i in range(n_agent)]
 
             # hard code batch size & buffer size
             for i in range(n_agent):
@@ -136,25 +131,51 @@ class MultiTradingEnv:
                 agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs
+            
         elif agent_type == "value":
-            action_spaces = [(3, 9, 5) for i in range(n_agent)]
-            observation_spaces = [7 for i in range(n_agent)]
+            action_spaces = [(3) for i in range(n_agent)]
+            observation_spaces = [3 for i in range(n_agent)]
             for i in range(n_agent):
-                buffer_size = max(min_batch_size, 250)
-                batch_size = random.randint(min_batch_size, buffer_size)
-                n_epoch =  round(14 / (buffer_size / batch_size))
+                buffer_size = 45
+                batch_size = 32
+                n_epoch = 10
+                # buffer_size = max(min_batch_size, 250)
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
                 value_agent = ValueAgent(algorithm = algorithm,
-                                        observation_space = observation_spaces[i],
-                                        action_space = action_spaces[i],
-                                        device = device,
-                                        actor_lr = actor_lr,
-                                        value_lr = value_lr,
-                                        batch_size = batch_size,
-                                        buffer_size = buffer_size,
-                                        n_epoch = n_epoch
-                                    )
+                                           observation_space = observation_spaces[i],
+                                           action_space = action_spaces[i],
+                                           device = device,
+                                           actor_lr = actor_lr,
+                                           value_lr = value_lr,
+                                           batch_size = batch_size,
+                                           buffer_size = buffer_size,
+                                           n_epoch = n_epoch
+                                        )
 
                 agents.append(value_agent)
+
+        elif agent_type == "scale":
+            action_spaces = [(3) for i in range(n_agent)]
+            observation_spaces = [6 for i in range(n_agent)]
+            for i in range(n_agent):
+                buffer_size = 45
+                batch_size = 32
+                n_epoch = 10
+                # buffer_size = max(min_batch_size, 250)
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
+                scale_agent = ScalingAgent(algorithm = algorithm,
+                                           observation_space = observation_spaces[i],
+                                           action_space = action_spaces[i],
+                                           device = device,
+                                           actor_lr = actor_lr,
+                                           value_lr = value_lr,
+                                           batch_size = batch_size,
+                                           buffer_size = buffer_size,
+                                           n_epoch = n_epoch
+                                        )
+                agents.append(scale_agent)
         
         return group_name, agents
 
@@ -175,6 +196,9 @@ class MultiTradingEnv:
             'volume': market_stats['volume'],
             'value': market_stats['value'],
             'risk_free_rate': market_stats['risk_free_rate'],
+            'n_optimistic': agent.ScalingAgent.get_opt_number,
+            'n_pessimistic': agent.ScalingAgent.get_pes_number,
+            'n_fundamentalist': agent.ScalingAgent.get_fud_number
         }
         return market
 
@@ -207,8 +231,7 @@ class MultiTradingEnv:
     def get_rewards(self, actions, next_states):
         rewards = {}
         for agent, agent_id in zip(self.agents, self.agent_ids):
-            action_status = self.core.get_rl_agent_status(agent_id)
-            rewards[agent_id] = agent.calculate_reward(actions[agent_id], next_states[agent_id], action_status)
+            rewards[agent_id] = agent.calculate_reward(actions[agent_id], next_states[agent_id])
         
         return rewards
 

@@ -4,8 +4,8 @@ import random
 from numpy.lib.function_base import quantile
 import talib
 from datetime import datetime, timedelta, time
-from typing import Dict, List
-
+from typing import DefaultDict, Dict, List
+from collections import defaultdict
 from .message import Message
 from .order import LimitOrder, MarketOrder, ModificationOrder
 
@@ -311,8 +311,8 @@ class RLAgent(Agent):
 
 
         bid_or_ask = action[0]
-        ticks = action[1]
-        volume = action[2] + 1
+        ticks = random.randint(1, 5)
+        volume = random.randint(1, 5)
         current_price = self.core.get_current_price('TSMC')
         tick_size = self.core.get_tick_size('TSMC')
 
@@ -324,7 +324,8 @@ class RLAgent(Agent):
             self.action_status = RLAgent.INVALID_ACTION
             best_bid = self.core.get_best_bids('TSMC', 1)
             best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
-            price = round(best_bid + (4-ticks) * tick_size, 2)
+            # price = round(best_bid + (4-ticks) * tick_size, 2)
+            price = round(best_bid + ticks * tick_size, 2)
             self.place_limit_bid_order('TSMC', float(volume), float(price))
 
         elif bid_or_ask == 1:
@@ -332,7 +333,8 @@ class RLAgent(Agent):
             self.action_status = RLAgent.INVALID_ACTION
             best_ask = self.core.get_best_asks('TSMC', 1)
             best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
-            price = round(best_ask + (ticks-4) * tick_size, 2)
+            # price = round(best_ask + (ticks-4) * tick_size, 2)
+            price = round(best_ask - ticks * tick_size, 2)
             self.place_limit_ask_order('TSMC', float(volume), float(price))
 
     def receive_message(self, message):
@@ -351,83 +353,167 @@ class ScalingAgent(Agent):
                  start_cash = 1000000,
                  start_securities = None,
                  average_cost = 100,
-                 bid_side = 0.5,
                  range_of_price = 5,
                  range_of_quantity = 5,
-                 risk_preference = 1):
+                 risk_preference = 1,
+                 group = 'optimistic'):
+                
         super().__init__(_id = _id, 
                          _type = 'sc',
                          start_cash = start_cash,
                          start_securities = start_securities,
                          average_cost = average_cost,
-                         risk_preference = 1)
+                         risk_preference = risk_preference)
                          
         ScalingAgent.add_counter()
         self.range_of_quantity = range_of_quantity
         self.range_of_price = range_of_price
-        self.bid_side = bid_side
+        self.group = group # [optimistic, pessimistic, fundamentalist]
         self.time_delta = 0
-        self.v_1 = 0
-        self.v_2 = 0
-        self.beta = 0
-        self.alpha_1 = 0
-        self.alpha_2 = 0
-        self.alpha_3 = 0
+        self.v_1 = 2
+        self.v_2 = 0.6
+        self.beta = 4
+        self.alpha_1 = 0.6
+        self.alpha_2 = 1.5
+        self.alpha_3 = 1
         self.fundamentalist_discount = 0.75
+        self.precision = 100
+        self.return_rate_range = 20
+        
+        if self.group == 'optimistic':
+            ScalingAgent.num_opt_noise_agent += 1
 
+        elif self.group == 'pessimistic':
+            ScalingAgent.num_pes_noise_agent += 1
+
+        elif self.group == 'fundamentalist':
+            ScalingAgent.num_fundamentalist_agent += 1
+        
     def step(self):
         super().step()
+        self.check_group()
         self.generate_order()
 
+    def check_group(self):
+        market_stats = self.core.get_call_env_state(lookback = self.return_rate_range, from_last = False)
+        current_value = market_stats['value'][-1]
+        current_price = market_stats['price'][-1]
+        d_p = np.diff(market_stats['price']).mean().item()
+        return_rate = d_p / current_price
 
-    def optimistic_probability(self, return_rate, price):
+        # check opinion
+        if self.group == 'optimistic' and self.optimistic_to_pessimistic(return_rate, current_price):
+            self.group = 'pessimistic'
+            ScalingAgent.num_opt_noise_agent -= 1
+            ScalingAgent.num_pes_noise_agent += 1
+            
+        elif self.group == 'pessimistic' and self.pessimistic_to_optimistic(return_rate, current_price):
+            self.group = 'optimistic'
+            ScalingAgent.num_pes_noise_agent -= 1
+            ScalingAgent.num_opt_noise_agent += 1
+
+        # check group
+        self.switch_noist_fundamentalist(d_p, current_price, current_value)
+
+
+    def pessimistic_to_optimistic(self, return_rate, price):
         num_noise_agent = ScalingAgent.num_opt_noise_agent + ScalingAgent.num_pes_noise_agent
         opinion_prop = (ScalingAgent.num_opt_noise_agent - ScalingAgent.num_pes_noise_agent) / num_noise_agent
         utility = self.alpha_1 * opinion_prop + (self.alpha_2/self.v_1) * return_rate/price
-        prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility)
-        return prob
+        prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility) / self.precision
+        if np.random.binomial(n = 1, p = prob) == 1:
+            return True
+        else:
+            return False
 
-    def pessimistic_probability(self, return_rate, price):
+    def optimistic_to_pessimistic(self, return_rate, price):
         num_noise_agent = ScalingAgent.num_opt_noise_agent + ScalingAgent.num_pes_noise_agent
         opinion_prop = (ScalingAgent.num_opt_noise_agent - ScalingAgent.num_pes_noise_agent) / num_noise_agent
         utility = self.alpha_1 * opinion_prop + (self.alpha_2/self.v_1) * return_rate/price
-        prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(-utility)
-        return prob
+        prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(-utility) / self.precision
+        if np.random.binomial(n = 1, p = prob) == 1:
+            return True
+        else:
+            return False
 
-    def switch_noist_fundamentalist(self, original_group, dividends, risk_free_rate, return_rate, price, value):
-        chartist_profit = (dividends + (1 / self.v_2)*return_rate) / price - risk_free_rate
-        fundamentalist_profit = self.fundamentalist_discount * math.abs( (value - price) / price)
+    def switch_noist_fundamentalist(self, d_p, price, value):
+        original_group = self.group
+        risk_free_rate = self.core.get_risk_free_rate()
+        dividends = 0
+
+        chartist_profit = (dividends + (1 / self.v_2)*d_p) / price - risk_free_rate
+        fundamentalist_profit = self.fundamentalist_discount * abs( (value - price) / price)
         utility_21 = self.alpha_3 * (chartist_profit - fundamentalist_profit)
         utility_22 = self.alpha_3 * (-chartist_profit - fundamentalist_profit)
 
         if original_group == 'fundamentalist':
-            fund_to_opt_prob = self.v_2 * (ScalingAgent.num_opt_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_21)
-            fund_to_pes_prob = self.v_2 * (ScalingAgent.num_pes_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_22)
+            fund_to_opt_prob = self.v_2 * (ScalingAgent.num_opt_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_21) / self.precision
+            fund_to_pes_prob = self.v_2 * (ScalingAgent.num_pes_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_22) / self.precision
+            if fund_to_opt_prob >= fund_to_pes_prob and np.random.binomial(n = 1, p = fund_to_opt_prob) == 1:
+                self.group = 'optimistic'
+                ScalingAgent.num_fundamentalist_agent -=1
+                ScalingAgent.num_opt_noise_agent += 1
+                
+            elif np.random.binomial(n = 1, p = fund_to_pes_prob) == 1:
+                self.group = 'pessimistic'
+                ScalingAgent.num_fundamentalist_agent -=1
+                ScalingAgent.num_pes_noise_agent += 1
+
 
         elif original_group == 'optimistic':
-            opt_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_21)
+            opt_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_21) / self.precision
+            if np.random.binomial(n = 1, p = opt_to_fund_prob) == 1:
+                self.group = 'fundamentalist'
+                ScalingAgent.num_opt_noise_agent -= 1
+                ScalingAgent.num_fundamentalist_agent +=1
 
         elif original_group == 'pessimistic':
-            pes_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_22)
-        
+            pes_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_22) / self.precision
+            if np.random.binomial(n = 1, p = pes_to_fund_prob) == 1:
+                self.group = 'fundamentalist'
+                ScalingAgent.num_pes_noise_agent -= 1
+                ScalingAgent.num_fundamentalist_agent +=1
 
     def generate_order(self):
-        risk_free_rate = self.core.get_risk_free_rate()
-        freq_revalue = 0
-        exp_utility = math.exp(self.get_utility())
-        time_increment = 0
-        switch_prob = freq_revalue * exp_utility * time_increment
-
         # which one?
         code = np.random.choice(list(self.holdings.keys()))
         current_price = self.core.get_current_price(code)
+        current_value = self.core.get_current_value(code)
+
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
-        price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price+1) * tick_size , 2)
-        if np.random.binomial(n = 1, p = self.bid_side) == 1:
-            self.place_limit_bid_order(code, quantity, price)
-        else:
-            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), price)
+        bid_price = round(current_price + np.random.randint(0, self.range_of_price) * tick_size , 2)
+        ask_price = round(current_price + np.random.randint(-self.range_of_price, 0) * tick_size , 2)
+
+        if self.group == 'optimistic':
+            self.place_limit_bid_order(code, quantity, bid_price)
+
+        elif self.group == 'pessimistic':
+            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), ask_price)
+
+        elif self.group == 'fundamentalist':
+            if current_value > current_price:
+                self.place_limit_bid_order(code, quantity, bid_price)
+            elif current_value < current_price:
+                self.place_limit_ask_order(code, quantity, ask_price)
+    
+    @classmethod
+    def get_opt_number(cls):
+        return ScalingAgent.num_opt_noise_agent
+    
+    @classmethod
+    def get_pes_number(cls):
+        return ScalingAgent.num_pes_noise_agent
+
+    @classmethod
+    def get_fud_number(cls):
+        return ScalingAgent.num_fundamentalist_agent
+
+    @classmethod
+    def reset_agent_number(cls):
+        ScalingAgent.num_opt_noise_agent = 0
+        ScalingAgent.num_pes_noise_agent = 0
+        ScalingAgent.num_fundamentalist_agent = 0
 
 
 
@@ -972,55 +1058,17 @@ class ParallelAgent(Agent):
         self.range_of_price = range_of_price
         self.bid_side = bid_side
 
-    # def step(self, action = None):
-    #     super().step()
-    #     if isinstance(action, type(None)):
-    #         return
-
-    #     bid_or_ask = action[0]
-    #     ticks = action[1]
-    #     volume = action[2] + 1
-    #     current_price = self.core.get_current_price('TSMC')
-    #     tick_size = self.core.get_tick_size('TSMC')
-
-    #     if bid_or_ask == 2:
-    #         self.action_status = RLAgent.HOLD
-    #         return
-    #     elif bid_or_ask == 0:
-    #         # bid
-    #         self.action_status = RLAgent.INVALID_ACTION
-    #         best_bid = self.core.get_best_bids('TSMC', 1)
-    #         best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
-    #         price = round(best_bid + (4-ticks) * tick_size, 2)
-    #         self.place_limit_bid_order('TSMC', volume, price)
-
-    #     elif bid_or_ask == 1:
-    #         # ask
-    #         self.action_status = RLAgent.INVALID_ACTION
-    #         best_ask = self.core.get_best_asks('TSMC', 1)
-    #         best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
-    #         price = round(best_ask + (ticks-4) * tick_size, 2)
-    #         self.place_limit_ask_order('TSMC', volume, price)
-
-    # def receive_message(self, message):
-    #     super().receive_message(message)
-    #     if message.subject == 'ORDER_PLACED':
-    #         self.action_status = RLAgent.VALID_ACTION
-
     def step(self):
         super().step()
-        # to trade?
-        # if np.random.binomial(n = 1, p = 0.1) == 1:
         self.generate_order()
 
 
     def generate_order(self):
-        # which one?
         code = np.random.choice(list(self.holdings.keys()))
         current_price = self.core.get_current_price(code)
         quantity = np.random.randint(1, self.range_of_quantity)
         tick_size = self.core.get_tick_size(code)
-        price = round(current_price + np.random.randint(-self.range_of_price, self.range_of_price+1) * tick_size , 2)
+        price = round(current_price + random.randint(-self.range_of_price, self.range_of_price) * tick_size , 2)
         if np.random.binomial(n = 1, p = self.bid_side) == 1:
             self.place_limit_bid_order(code, quantity, price)
         else:

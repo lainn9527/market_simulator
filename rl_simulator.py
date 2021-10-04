@@ -103,7 +103,7 @@ def test(env_config, model, n_steps, output_dir):
 
 if __name__=='__main__':
     training_cofig = {
-        'config_path': Path("config/herd.json"),
+        'config_path': Path("config/legacy/herd.json"),
         'result_dir': Path("rl_result/te/"),
         'resume': False,
         'resume_model_dir': Path("rl_result/noir_10300/model.zip"),

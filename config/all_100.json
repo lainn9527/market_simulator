@@ -32,15 +32,26 @@
                 "TSMC": 2
             }
         },
+        "ParallelAgent": {
+            "name": "pr",
+            "number": 500,
+            "bid_side": 0.5,
+            "range_of_price": 10,
+            "range_of_quantity": 5,
+            "cash": 5000,
+            "securities": {
+                "TSMC": 1
+            }
+        },
         "RLAgent": [
             {
                 "name": "ppo_tr",
                 "type": "trend",
                 "algorithm": "ppo",
                 "number": 100,
-                "cash": 10000,
+                "cash": 100000,
                 "securities": {
-                    "TSMC": 1
+                    "TSMC": 10
                 },
                 "min_look_back": 2,
                 "max_look_back": 100
@@ -49,10 +60,10 @@
                 "name": "ppo_va",
                 "type": "value",
                 "algorithm": "ppo",
-                "number": 100,
-                "cash": 10000,
+                "number": 1,
+                "cash": 100000,
                 "securities": {
-                    "TSMC": 1
+                    "TSMC": 10
                 }
             }
         ]

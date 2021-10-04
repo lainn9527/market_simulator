@@ -112,6 +112,9 @@ class AgentManager:
         The initial cash and securities are followed Pareto Law, also known as 80/20 rule.
         The risk preference follows Gaussian distribution but now it only affect the trend and mean revert agents.
         '''
+        # reset number of scaling agent
+        agent.ScalingAgent.reset_agent_number()
+
         for agent_type, groups in self.config.items():
             if len(groups) == 0:
                 continue
@@ -138,7 +141,7 @@ class AgentManager:
             range_of_price = config['range_of_price']
             range_of_quantity = config['range_of_quantity']
             bid_side = config['bid_side']
-            agents = self.build_zi_agent(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side)
+            agents = self.build_zi_agents(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side)
 
         elif agent_type == "ParallelAgent":
             range_of_price = config['range_of_price']
@@ -151,6 +154,12 @@ class AgentManager:
         elif agent_type == "FundamentalistAgent":
             securities_value = {code: self.core.get_value(code) for code in self.securities_list}
             agents = self.build_fu_agent(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, securities_value)
+
+        elif agent_type == "ScalingAgent":
+            range_of_price = config['range_of_price']
+            range_of_quantity = config['range_of_quantity']
+            group_type = config['type']
+            agents = self.build_sc_agents(agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, group_type)
         # elif agent_type == "TrendAgent":
         #     return self.build_tr_agent(config, agent_cashes, agent_holdings, agent_average_costs, risk_preferences)
         # elif agent_type == "MeanRevertAgent":
@@ -189,7 +198,24 @@ class AgentManager:
         
         return agents
 
-    def build_zi_agent(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side):
+    def build_sc_agents(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, group_type):
+        agents = []
+        n_agents = len(agent_ids)
+        for i in range(n_agents):
+            new_agent = agent.ScalingAgent(_id = agent_ids[i],
+                                           start_cash = agent_cashes[i], 
+                                           start_securities = agent_holdings[i],
+                                           average_cost= agent_average_costs[i],
+                                           risk_preference = risk_preferences[i],
+                                           range_of_price = range_of_price,
+                                           range_of_quantity = range_of_quantity,
+                                           group = group_type)
+            agents.append(new_agent)
+        
+        return agents
+
+
+    def build_zi_agents(self, agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences, range_of_price, range_of_quantity, bid_side):
         agents = []
         n_agents = len(agent_ids)
         for i in range(n_agents):

@@ -86,10 +86,6 @@ def write_multi_records(info: Dict, output_dir: Path):
     
     rl_states = info['states']
     # remove the market states of agent
-    for agent_id, states in rl_states.items():
-        states['obs_size'] = len(states['states'][0])
-        # for state in states['states']:
-            # state.pop('market')
     
     file_path = output_dir / "rl_agent.json"
     with open(file_path, 'w') as fp:

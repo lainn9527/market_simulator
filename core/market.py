@@ -1,9 +1,5 @@
 import random
 import math
-from datetime import time, timedelta
-
-from numpy.lib import type_check
-
 from .order_book import OrderBook, CallOrderBook
 from .message import Message
 from .order import LimitOrder, MarketOrder
@@ -109,8 +105,18 @@ class Market:
     def change_value(self, code):
         v = random.gauss(0, 0.005)
         previous_value = self.get_value(code)
-        current_value = math.exp(math.log(previous_value) + v)
+        current_value = round(math.exp(math.log(previous_value) + v), 1)
         self.orderbooks[code].adjust_value(current_value)
+
+    def random_event(self, code):
+        timestep = self.get_time()
+        if timestep % 10 != 0:
+            return
+        v = random.gauss(0, 0.05)
+        previous_value = self.get_value(code)
+        current_value = round(math.exp(math.log(previous_value) + v), 1)
+        self.orderbooks[code].adjust_value(current_value)
+
 
     def check_volatility(self):
         for code, orderbook in self.orderbooks.items():
@@ -220,27 +226,33 @@ class CallMarket(Market):
             orderbook.clear_orders()
             orderbook.step_summarize()
             self.change_value(code)
+            self.random_event(code)
             
         
         if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
             self.issue_interest()
         
         return done
+    
 
     def market_stats(self):
         stats = {}
         for code, orderbook in self.orderbooks.items():
+            value = orderbook.steps_record['value'][-1]
             volume = orderbook.steps_record['volume'][-1]
             amount = orderbook.steps_record['amount'][-1]
             price = orderbook.steps_record['price'][-1]
             bid = orderbook.steps_record['bid'][-1]
             ask = orderbook.steps_record['ask'][-1]
-            stats[code] = {'price': price, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
+            stats[code] = {'price': price, 'value': value, 'amount': amount, 'volume': volume, 'bid': bid, 'ask': ask}
         return stats
 
     def get_current_price(self, code):
         return self.orderbooks[code].current_record['price']
 
+    def get_current_value(self, code):
+        return self.orderbooks[code].current_record['value']
+        
     def get_base_price(self, code):
         return self.orderbooks[code].steps_record['price'][0]
 

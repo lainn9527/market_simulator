@@ -10,6 +10,8 @@ from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 class PPO(nn.Module):
     def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device, n_epoch):
         super(PPO, self).__init__()
+        action_space = action_space if isinstance(action_space, tuple) else [action_space]
+        self.observation_space = observation_space
         self.action_space = action_space
         total_action_size = sum(action_space)
         hidden_layer_size = 108

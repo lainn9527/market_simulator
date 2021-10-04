@@ -8,8 +8,7 @@ from torch.distributions import Categorical
 from torch.optim import Adam
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
-from time import perf_counter
-from datetime import timedelta
+
 class PPO(nn.Module):
     def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device):
         super(PPO, self).__init__()

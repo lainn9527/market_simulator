@@ -5,7 +5,6 @@ from numpy.lib.function_base import angle
 
 # from core import agent
 from .market import Market, CallMarket
-from .order import LimitOrder, MarketOrder
 from .agent_manager import AgentManager
 
 
@@ -204,6 +203,10 @@ class Core:
 
     def get_current_price(self, code):
         return self.market.get_current_price(code)
+
+    def get_current_value(self, code):
+        return self.market.get_current_value(code)
+
 
     def get_records(self, code, _type, step=1, from_last = True):
         return self.market.get_records(code, _type, step, from_last)
