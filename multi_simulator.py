@@ -104,9 +104,8 @@ def train_model(train_config: Dict, env_config: Dict):
 
             # store the agents
             model_output_path = train_config['result_dir'] / 'model.pkl'
-            state_dicts = {f"base_{i}": agent.rl.state_dict() for i, agent in enumerate(agents)}
-            torch.save(state_dicts, model_output_path)
-            print(f"The model is stored in {model_output_path}")
+            multi_env.store_agents(model_output_path)
+            
 
             # validate
             if train_config['validate']:
@@ -202,12 +201,12 @@ if __name__=='__main__':
     config_name = 'all_250'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_entropy_diff_hyper/"),
-        'resume': False,
-        'resume_model_dir': Path("simulation_result/multi/scaling_250_pure_wealth/"),
+        'result_dir': Path(f"simulation_result/multi/{config_name}_test/"),
+        'resume': True,
+        'resume_model_dir': Path(f"simulation_result/multi/{config_name}_test/"),
         'train': True,
         'train_epochs': 2,
-        'train_steps': 1000,
+        'train_steps': 100,
         'validate': True,
         'validate_steps': 1000,
         'predict': True,

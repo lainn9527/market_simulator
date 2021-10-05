@@ -4,7 +4,7 @@ import torch
 import math
 from copy import deepcopy
 from core.core import Core
-from .rl_agent import BaseAgent, ValueAgent, ScalingAgent
+from .rl_agent import TrendAgent, ValueAgent, ScalingAgent
 from core import agent
 
 class MultiTradingEnv:
@@ -13,7 +13,7 @@ class MultiTradingEnv:
         self.core = None
         self.agents = []
         self.agent_ids = []
-        self.group_name = []
+        self.group_agents = {}
 
     def seed(self, seed=None):
         np.random.seed(seed)
@@ -21,9 +21,10 @@ class MultiTradingEnv:
 
     def reset(self, config):
         config = deepcopy(config)
+        group_name = list(self.group_agents.keys())
         pre_value = [config['Market']['Securities']['TSMC']['value']]
         pre_price = [config['Market']['Securities']['TSMC']['value']]
-
+        
         for i in range(249):
             pre_value.append(round(math.exp(math.log(pre_value[-1]) + random.gauss(0, 0.005)), 1))
             pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
@@ -34,7 +35,7 @@ class MultiTradingEnv:
         config['Market']['Securities']['TSMC']['volume'] = pre_volume
 
         self.core = Core(config, market_type="call")
-        agent_ids = self.core.multi_env_start(987, self.group_name)
+        agent_ids = self.core.multi_env_start(987, group_name)
         self.agent_ids = agent_ids
         init_states = self.get_states() 
 
@@ -54,7 +55,6 @@ class MultiTradingEnv:
         return orderbooks, agent_manager
 
     def seed(self, s):
-        
         return s
 
     def render(self, timestep):
@@ -73,23 +73,25 @@ class MultiTradingEnv:
         device = torch.device(device)
         # build
         
-        group_name, agents = [], []
+        agents = []
+        group_agents = {}
         for config in agent_config:
             name, agent = self.build_agent(actor_lr, value_lr, batch_size, buffer_size, device, config)
             agents += agent
-            group_name.append(name)
+            group_agents[name] = agent
         
         if resume:
             resume_model_path = resume_model_dir / 'model.pkl'
             checkpoint = torch.load(resume_model_path)
-            for i, agent in enumerate(agents):
-                agent.rl.load_state_dict(checkpoint[f"base_{i}"])
-            print(f"Resume {len(agents)} rl agents from {resume_model_path}.")
+            for name, group_agent in group_agents.items():
+                for i, agent in enumerate(group_agent):
+                    agent.rl.load_state_dict(checkpoint[f"{name}_{i}"])
+                print(f"Resume {len(group_agent)} {name} agents from {resume_model_path}.")
         else:
             print(f"Initiate {len(agents)} rl agents")
 
         self.agents = agents
-        self.group_name = group_name
+        self.group_agents = group_agents
         
         return agents
 
@@ -120,16 +122,16 @@ class MultiTradingEnv:
                 # buffer_size = max(min_buffer_size, look_backs[i])
                 # batch_size = random.randint(min_batch_size, buffer_size)
                 # n_epoch =  round(14 / (buffer_size / batch_size))
-                trend_agent = BaseAgent(algorithm = algorithm,
-                                        observation_space = observation_spaces[i],
-                                        action_space = action_spaces[i],
-                                        device = device,
-                                        look_back = look_backs[i], 
-                                        actor_lr = actor_lr,
-                                        value_lr = value_lr,
-                                        batch_size = batch_size,
-                                        buffer_size = buffer_size,
-                                        n_epoch = n_epoch
+                trend_agent = TrendAgent(algorithm = algorithm,
+                                         observation_space = observation_spaces[i],
+                                         action_space = action_spaces[i],
+                                         device = device,
+                                         look_back = look_backs[i], 
+                                         actor_lr = actor_lr,
+                                         value_lr = value_lr,
+                                         batch_size = batch_size,
+                                         buffer_size = buffer_size,
+                                         n_epoch = n_epoch
                                     )
                 agents.append(trend_agent)
             # record
@@ -182,6 +184,14 @@ class MultiTradingEnv:
         
         return group_name, agents
 
+    def store_agents(self, model_output_path):
+        state_dicts = {}
+        for name, agents in self.group_agents.items():
+            for i, agent in enumerate(agents):
+                state_dicts[f"{name}_{i}"] = agent.rl.state_dict()
+
+        torch.save(state_dicts, model_output_path)
+        print(f"The model is stored in {model_output_path}")
         
     def get_states(self):
         states = {}
