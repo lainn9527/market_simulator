@@ -38,9 +38,9 @@
                 "type": "trend",
                 "algorithm": "ppo",
                 "number": 250,
-                "cash": 10000,
+                "cash": 100000,
                 "securities": {
-                    "TSMC": 1
+                    "TSMC": 10
                 },
                 "min_look_back": 2,
                 "max_look_back": 100
@@ -50,9 +50,19 @@
                 "type": "value",
                 "algorithm": "ppo",
                 "number": 250,
-                "cash": 10000,
+                "cash": 100000,
                 "securities": {
-                    "TSMC": 1
+                    "TSMC": 10
+                }
+            },
+            {
+                "name": "ppo_sc",
+                "type": "scale",
+                "algorithm": "ppo",
+                "number": 250,
+                "cash": 100000,
+                "securities": {
+                    "TSMC": 10
                 }
             }
         ]

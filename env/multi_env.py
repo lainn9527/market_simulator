@@ -114,9 +114,12 @@ class MultiTradingEnv:
 
             # hard code batch size & buffer size
             for i in range(n_agent):
-                buffer_size = max(min_buffer_size, look_backs[i])
-                batch_size = random.randint(min_batch_size, buffer_size)
-                n_epoch =  round(14 / (buffer_size / batch_size))
+                buffer_size = 45
+                batch_size = 32
+                n_epoch = 10
+                # buffer_size = max(min_buffer_size, look_backs[i])
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
                 trend_agent = BaseAgent(algorithm = algorithm,
                                         observation_space = observation_spaces[i],
                                         action_space = action_spaces[i],
@@ -157,7 +160,7 @@ class MultiTradingEnv:
 
         elif agent_type == "scale":
             action_spaces = [(3) for i in range(n_agent)]
-            observation_spaces = [6 for i in range(n_agent)]
+            observation_spaces = [3 for i in range(n_agent)]
             for i in range(n_agent):
                 buffer_size = 45
                 batch_size = 32
