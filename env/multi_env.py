@@ -119,9 +119,9 @@ class MultiTradingEnv:
                 buffer_size = 45
                 batch_size = 32
                 n_epoch = 10
-                # buffer_size = max(min_buffer_size, look_backs[i])
-                # batch_size = random.randint(min_batch_size, buffer_size)
-                # n_epoch =  round(14 / (buffer_size / batch_size))
+                buffer_size = max(min_buffer_size, look_backs[i])
+                batch_size = random.randint(min_batch_size, buffer_size)
+                n_epoch =  round(14 / (buffer_size / batch_size))
                 trend_agent = TrendAgent(algorithm = algorithm,
                                          observation_space = observation_spaces[i],
                                          action_space = action_spaces[i],
@@ -132,7 +132,7 @@ class MultiTradingEnv:
                                          batch_size = batch_size,
                                          buffer_size = buffer_size,
                                          n_epoch = n_epoch
-                                    )
+                                        )
                 agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs
@@ -144,9 +144,9 @@ class MultiTradingEnv:
                 buffer_size = 45
                 batch_size = 32
                 n_epoch = 10
-                # buffer_size = max(min_batch_size, 250)
-                # batch_size = random.randint(min_batch_size, buffer_size)
-                # n_epoch =  round(14 / (buffer_size / batch_size))
+                buffer_size = max(min_batch_size, 250)
+                batch_size = random.randint(min_batch_size, buffer_size)
+                n_epoch =  round(14 / (buffer_size / batch_size))
                 value_agent = ValueAgent(algorithm = algorithm,
                                            observation_space = observation_spaces[i],
                                            action_space = action_spaces[i],
@@ -167,9 +167,9 @@ class MultiTradingEnv:
                 buffer_size = 45
                 batch_size = 32
                 n_epoch = 10
-                # buffer_size = max(min_batch_size, 250)
-                # batch_size = random.randint(min_batch_size, buffer_size)
-                # n_epoch =  round(14 / (buffer_size / batch_size))
+                buffer_size = max(min_batch_size, 250)
+                batch_size = random.randint(min_batch_size, buffer_size)
+                n_epoch =  round(14 / (buffer_size / batch_size))
                 scale_agent = ScalingAgent(algorithm = algorithm,
                                            observation_space = observation_spaces[i],
                                            action_space = action_spaces[i],

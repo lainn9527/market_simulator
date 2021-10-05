@@ -13,7 +13,6 @@ from collections import namedtuple
 
 from core.utils import write_multi_records
 from core.core import Core
-from env.rl_agent import BaseAgent
 from env.multi_env import MultiTradingEnv
 
 Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state', 'done'])
@@ -201,12 +200,12 @@ if __name__=='__main__':
     config_name = 'all_250'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_test/"),
-        'resume': True,
+        'result_dir': Path(f"simulation_result/multi/{config_name}_no_exp_diff_hyper/"),
+        'resume': False,
         'resume_model_dir': Path(f"simulation_result/multi/{config_name}_test/"),
         'train': True,
         'train_epochs': 2,
-        'train_steps': 100,
+        'train_steps': 1000,
         'validate': True,
         'validate_steps': 1000,
         'predict': True,
