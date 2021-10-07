@@ -311,8 +311,10 @@ class RLAgent(Agent):
 
 
         bid_or_ask = action[0]
-        ticks = random.randint(1, 5)
-        volume = random.randint(1, 5)
+        ticks = action[1]
+        volume = action[2]
+        # ticks = random.randint(1, 10)
+        # volume = random.randint(1, 5)
         current_price = self.core.get_current_price('TSMC')
         tick_size = self.core.get_tick_size('TSMC')
 

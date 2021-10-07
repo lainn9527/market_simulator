@@ -100,10 +100,20 @@ class MultiTradingEnv:
         n_agent = config['number']
         algorithm = config['algorithm']
         group_name = f"{config['name']}_{config['number']}"
-        agents = []
+
+        rand_weight = np.random.rand(n_agent, 4)
+        wealth_weight = rand_weight / rand_weight.sum(1).reshape([-1, 1])
+        wealth_weight = wealth_weight.tolist()
+        # wealth_weight = [[0.35, 0.25, 0.25, 0.15] for _ in range(n_agent)]
+
         min_batch_size = 20
         min_buffer_size = 32
+        max_buffer_size = 250
+        n_epoch = 10
+        buffer_size = 45
+        batch_size = 32
 
+        agents = []
         if agent_type == "trend":
             if 'look_backs' in config.keys():
                 look_backs = config['look_backs']
@@ -111,22 +121,19 @@ class MultiTradingEnv:
                 min_look_back = config['min_look_back']
                 max_look_back = config['max_look_back']
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
-            action_spaces = [(3) for i in range(n_agent)]
-            observation_spaces = [3 for i in range(n_agent)]
+            action_spaces = [(5) for i in range(n_agent)]
+            observation_spaces = [4 for i in range(n_agent)]
 
-            # hard code batch size & buffer size
             for i in range(n_agent):
-                buffer_size = 45
-                batch_size = 32
-                n_epoch = 10
-                buffer_size = max(min_buffer_size, look_backs[i])
-                batch_size = random.randint(min_batch_size, buffer_size)
-                n_epoch =  round(14 / (buffer_size / batch_size))
+                # buffer_size = max(min_buffer_size, look_backs[i])
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
                 trend_agent = TrendAgent(algorithm = algorithm,
                                          observation_space = observation_spaces[i],
                                          action_space = action_spaces[i],
                                          device = device,
-                                         look_back = look_backs[i], 
+                                         look_back = look_backs[i],
+                                         wealth_weight = wealth_weight[i],
                                          actor_lr = actor_lr,
                                          value_lr = value_lr,
                                          batch_size = batch_size,
@@ -136,21 +143,18 @@ class MultiTradingEnv:
                 agents.append(trend_agent)
             # record
             config['look_backs'] = look_backs
-            
         elif agent_type == "value":
-            action_spaces = [(3) for i in range(n_agent)]
-            observation_spaces = [3 for i in range(n_agent)]
+            action_spaces = [(5) for i in range(n_agent)]
+            observation_spaces = [4 for i in range(n_agent)]
             for i in range(n_agent):
-                buffer_size = 45
-                batch_size = 32
-                n_epoch = 10
-                buffer_size = max(min_batch_size, 250)
-                batch_size = random.randint(min_batch_size, buffer_size)
-                n_epoch =  round(14 / (buffer_size / batch_size))
+                # buffer_size = max(min_buffer_size, max_buffer_size)
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
                 value_agent = ValueAgent(algorithm = algorithm,
                                            observation_space = observation_spaces[i],
                                            action_space = action_spaces[i],
                                            device = device,
+                                           wealth_weight = wealth_weight[i],
                                            actor_lr = actor_lr,
                                            value_lr = value_lr,
                                            batch_size = batch_size,
@@ -161,19 +165,17 @@ class MultiTradingEnv:
                 agents.append(value_agent)
 
         elif agent_type == "scale":
-            action_spaces = [(3) for i in range(n_agent)]
-            observation_spaces = [3 for i in range(n_agent)]
+            action_spaces = [(5) for i in range(n_agent)]
+            observation_spaces = [4 for i in range(n_agent)]
             for i in range(n_agent):
-                buffer_size = 45
-                batch_size = 32
-                n_epoch = 10
-                buffer_size = max(min_batch_size, 250)
-                batch_size = random.randint(min_batch_size, buffer_size)
-                n_epoch =  round(14 / (buffer_size / batch_size))
+                # buffer_size = max(min_buffer_size, max_buffer_size)
+                # batch_size = random.randint(min_batch_size, buffer_size)
+                # n_epoch =  round(14 / (buffer_size / batch_size))
                 scale_agent = ScalingAgent(algorithm = algorithm,
                                            observation_space = observation_spaces[i],
                                            action_space = action_spaces[i],
                                            device = device,
+                                           wealth_weight = wealth_weight[i],
                                            actor_lr = actor_lr,
                                            value_lr = value_lr,
                                            batch_size = batch_size,
@@ -182,6 +184,8 @@ class MultiTradingEnv:
                                         )
                 agents.append(scale_agent)
         
+        # record
+        config['weight_wealth'] = wealth_weight
         return group_name, agents
 
     def store_agents(self, model_output_path):
@@ -216,9 +220,11 @@ class MultiTradingEnv:
         return market
 
     def get_agent_state(self, agent_id):
-        agent_state = {'cash': self.core.agent_manager.agents[agent_id].cash,
-                    'TSMC': self.core.agent_manager.agents[agent_id].holdings['TSMC'],
-                    'wealth': self.core.agent_manager.agents[agent_id].wealth,}
+        agent_state = {
+            'cash': self.core.agent_manager.agents[agent_id].cash,
+            'TSMC': self.core.agent_manager.agents[agent_id].holdings['TSMC'],
+            'wealth': self.core.agent_manager.agents[agent_id].wealth,
+        }
         
         return agent_state
 

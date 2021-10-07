@@ -37,7 +37,7 @@
                 "name": "ppo_sc",
                 "type": "scale",
                 "algorithm": "ppo",
-                "number": 250,
+                "number": 500,
                 "cash": 100000,
                 "securities": {
                     "TSMC": 10

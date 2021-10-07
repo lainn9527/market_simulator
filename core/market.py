@@ -112,7 +112,7 @@ class Market:
         timestep = self.get_time()
         if timestep % 10 != 0:
             return
-        v = random.gauss(0, 0.05)
+        v = random.gauss(0, 0.01)
         previous_value = self.get_value(code)
         current_value = round(math.exp(math.log(previous_value) + v), 1)
         self.orderbooks[code].adjust_value(current_value)

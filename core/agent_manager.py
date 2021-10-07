@@ -106,6 +106,18 @@ class AgentManager:
         random.shuffle(agent_cashes)
         random.shuffle(agent_holdings)
         return agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences
+
+    def get_equal_init_states(self, group_name, number, cash, holdings):
+        agent_ids = [f"{group_name}_{i}" for i in range(number)]
+        agent_cashes = [cash for _ in range(number)]
+        agent_holdings = [{code: num for code, num in holdings.items()} for _ in range(number)] 
+        agent_average_costs = [random.gauss(mu = 100, sigma = 10) for _ in range(number)]
+        risk_preferences = [random.gauss(mu = self.global_config['risk_preference_mean'], sigma = self.global_config['risk_preference_var']) for i in range(number)]
+        if len(risk_preferences) > 1:
+            min_risk, max_risk = min(risk_preferences), max(risk_preferences)
+            risk_preferences = [ (risk_preference - min_risk) / (max_risk - min_risk) for risk_preference in risk_preferences]
+
+        return agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences
         
     def build_agents(self):
         '''
@@ -137,6 +149,7 @@ class AgentManager:
         original_holdings = config['securities'] if 'securities' in config.keys() else self.global_config['securities']
         alpha = self.global_config['alpha']
         agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences = self.get_init_states(group_name, n_agents, original_cash, original_holdings, alpha)
+        # agent_ids, agent_cashes, agent_holdings, agent_average_costs, risk_preferences = self.get_equal_init_states(group_name, n_agents, original_cash, original_holdings)
         if agent_type == "ZeroIntelligenceAgent":
             range_of_price = config['range_of_price']
             range_of_quantity = config['range_of_quantity']

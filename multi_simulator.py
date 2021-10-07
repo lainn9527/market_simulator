@@ -10,6 +10,7 @@ from pathlib import Path
 from torch.optim import Adam
 from copy import deepcopy
 from collections import namedtuple
+from multiprocessing import Pool
 
 from core.utils import write_multi_records
 from core.core import Core
@@ -52,114 +53,66 @@ def train_model(train_config: Dict, env_config: Dict):
         print(f"Store config in {train_config['result_dir'] / 'config.json'}")
         
     # init training parameters
-    if train_config['train']:
-        print("Start training...")
-        n_epochs = train_config['train_epochs']
-        n_steps = train_config['train_steps']
+    print("Start training...")
+    n_epochs = train_config['train_epochs']
+    train_steps = train_config['train_steps']
+    validate_steps = train_config['validate_steps']
+    for t in range(n_epochs):
+        print(f"Epoch {t} start")
+        agent_ids, states = multi_env.reset(env_config)
+        rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': [], 'policy_loss': [], 'value_loss': []} for agent_id in agent_ids}
 
-        for t in range(n_epochs):
-            print(f"Epoch {t} start")
-            agent_ids, states = multi_env.reset(env_config)
-            rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': [], 'policy_loss': [], 'value_loss': []} for agent_id in agent_ids}
-
-            for i in range(n_steps):
-                # collect actions
-                obs, actions, log_probs, rewards = {}, {}, {}, {}
-                for agent_id, agent in zip(agent_ids, agents):
-                    obs[agent_id], actions[agent_id], log_probs[agent_id] = agent.get_action(states[agent_id])
-
-                # rewards, next_steps
-                done, rewards, next_states, next_obs = multi_env.step(actions)
-
-                for agent_id, agent in zip(agent_ids, agents):
-                    loss = agent.update(Transition(obs[agent_id],actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id], done))
-
-                    # log
-                    rl_records[agent_id]['states'].append({'observations': obs[agent_id].tolist(), 'agent_state': states[agent_id]['agent']})
-                    rl_records[agent_id]['actions'].append(actions[agent_id])
-                    rl_records[agent_id]['rewards'].append(rewards[agent_id])
-                    
-                    if loss != None:
-                        rl_records[agent_id]['policy_loss'] += loss['policy_loss']
-                        rl_records[agent_id]['value_loss'] += loss['value_loss']
-                
-                states = next_states
-                if i % 10 == 0:
-                    multi_env.render(i)
-                
-                if done:
-                    multi_env.render(i)
-                    print(f"No quote. End of this episode")
-                    break
-            
+        for i in range(train_steps):
+            # collect actions
+            obs, actions, log_probs, rewards = {}, {}, {}, {}
             for agent_id, agent in zip(agent_ids, agents):
-                agent.end_episode()
+                obs[agent_id], actions[agent_id], log_probs[agent_id] = agent.get_action(states[agent_id])
 
-            # log
-            orderbooks, agent_manager = multi_env.close()
-            training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
-            write_multi_records(training_record, train_output_dir / f'sim_{t}')    
-            print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
+            # rewards, next_steps
+            done, rewards, next_states, next_obs = multi_env.step(actions)
 
-            # store the agents
-            model_output_path = train_config['result_dir'] / 'model.pkl'
-            multi_env.store_agents(model_output_path)
-            
+            for agent_id, agent in zip(agent_ids, agents):
+                loss = agent.update(Transition(obs[agent_id],actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id], done))
 
-            # validate
-            if train_config['validate']:
-                print("Start validating...")
-                n_steps = train_config['validate_steps']
-                agent_ids, states = multi_env.reset(env_config)
-                rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
-
-                for i in range(n_steps):
-                    # collect actions
-                    obs, actions = {}, {}
-                    for agent_id, agent in zip(agent_ids, agents):
-                        obs[agent_id], actions[agent_id] = agent.predict(states[agent_id])
-
-                    # rewards, next_steps
-                    done, rewards, next_states, next_obs = multi_env.step(actions)
-
-                    for agent_id, agent in zip(agent_ids, agents):
-                        # log
-                        rl_records[agent_id]['states'].append({'observations': obs[agent_id].tolist(), 'agent_state': states[agent_id]['agent']})
-                        rl_records[agent_id]['actions'].append(actions[agent_id])
-                    
-                    states = next_states
-                    if i % 10 == 0:
-                        multi_env.render(i)
-
-                    if done:
-                        multi_env.render(i)
-                        print(f"No quote. End of this episode")
-                        break    
+                # log
+                rl_records[agent_id]['states'].append({'observations': obs[agent_id].tolist(), 'agent_state': states[agent_id]['agent']})
+                rl_records[agent_id]['actions'].append(actions[agent_id])
+                rl_records[agent_id]['rewards'].append(rewards[agent_id])
                 
-                for agent_id, agent in zip(agent_ids, agents):
-                    agent.end_episode()
+                if loss != None:
+                    rl_records[agent_id]['policy_loss'] += loss['policy_loss']
+                    rl_records[agent_id]['value_loss'] += loss['value_loss']
+            
+            states = next_states
+            if i % 10 == 0:
+                multi_env.render(i)
+            
+            if done:
+                multi_env.render(i)
+                print(f"No quote. End of this episode")
+                break
+        
+        for agent_id, agent in zip(agent_ids, agents):
+            agent.end_episode()
 
-                orderbooks, agent_manager = multi_env.close()
-                validate_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
-                write_multi_records(validate_record, validate_output_dir / f'sim_{t}')    
-                print(f"Validation result is stored in {validate_output_dir / f'sim_{t}'}")
+        # log
+        orderbooks, agent_manager = multi_env.close()
+        training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
+        write_multi_records(training_record, train_output_dir / f'sim_{t}')    
+        print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
 
-    else:
-        print("Skip training")
+        # store the agents
+        model_output_path = train_config['result_dir'] / 'model.pkl'
+        multi_env.store_agents(model_output_path)
+        
 
-    if train_config['predict']:
-        print("Start predict...")
         # validate
-        predict_output_dir = train_config['result_dir'] / 'predict'
-        n_epochs = train_config['predict_epochs']
-        n_steps = train_config['predict_steps']
-
-        for t in range(n_epochs):
-            print(f"Epoch {t} start")
+        if train_config['validate']:
+            print("Start validating...")
             agent_ids, states = multi_env.reset(env_config)
             rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
 
-            for i in range(n_steps):
+            for i in range(validate_steps):
                 # collect actions
                 obs, actions = {}, {}
                 for agent_id, agent in zip(agent_ids, agents):
@@ -186,30 +139,104 @@ def train_model(train_config: Dict, env_config: Dict):
                 agent.end_episode()
 
             orderbooks, agent_manager = multi_env.close()
-            predict_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
-            write_multi_records(predict_record, predict_output_dir / f'sim_{t}')    
-            print(f"Prediction result is stored in {predict_output_dir / f'sim_{t}'}")
+            validate_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
+            write_multi_records(validate_record, validate_output_dir / f'sim_{t}')    
+            print(f"Validation result is stored in {validate_output_dir / f'sim_{t}'}")
 
+
+
+def predict_model(train_config: Dict, env_config: Dict):
+    predict_output_dir = train_config['result_dir'] / 'predict'
+
+    random_seed = 9528
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+
+    if train_config['train']:
+        resume_config_path = train_config['result_dir'] / 'config.json'
+        resume_model_dir = train_config['result_dir']
+    elif train_config['resume']:
+        resume_config_path = train_config['resume_model_dir'] / 'config.json'
+        resume_model_dir = train_config['resume_model_dir']
     else:
-        print("Skip predicting")
+        raise Exception('No model to predict.')
 
-    print("End the simulation")
+    env_config = json.loads(resume_config_path.read_text())
 
+    # init training env
+    multi_env = MultiTradingEnv()
+    rl_agent_config = env_config['Agent']['RLAgent']
+    agents = multi_env.build_agents(rl_agent_config,
+                                    train_config['actor_lr'],
+                                    train_config['value_lr'],
+                                    train_config['batch_size'],
+                                    train_config['buffer_size'],
+                                    train_config['device'],
+                                    resume = True,
+                                    resume_model_dir = resume_model_dir
+                                )
+        
+
+    print("Start predict...")
+    n_epochs = train_config['predict_epochs']
+    n_steps = train_config['predict_steps']
+    args_list = [(predict_output_dir / f"sim_{i}", n_steps, agents, multi_env, random_seed+i, ) for i in range(n_epochs)]
+    with Pool(6) as p:
+        p.starmap(predict, args_list)
+
+
+
+def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
+    np.random.seed(random_seed)
+    random.seed(random_seed)
+
+    agent_ids, states = multi_env.reset(env_config)
+    rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': []} for agent_id in agent_ids}
+    number = output_dir.parts[-1][-1]
+    print(f"Prediction {number} start")
+    for i in range(n_steps):
+        # collect actions
+        obs, actions = {}, {}
+        for agent_id, agent in zip(agent_ids, agents):
+            obs[agent_id], actions[agent_id] = agent.predict(states[agent_id])
+
+        # rewards, next_steps
+        done, rewards, next_states, next_obs = multi_env.step(actions)
+
+        for agent_id, agent in zip(agent_ids, agents):
+            # log
+            rl_records[agent_id]['states'].append({'observations': obs[agent_id].tolist(), 'agent_state': states[agent_id]['agent']})
+            rl_records[agent_id]['actions'].append(actions[agent_id])
+        
+        states = next_states
+
+        if done:
+            multi_env.render(i)
+            print(f"No quote. End of this episode")
+            break    
+    
+    for agent_id, agent in zip(agent_ids, agents):
+        agent.end_episode()
+
+    orderbooks, agent_manager = multi_env.close()
+    predict_record = {'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
+    write_multi_records(predict_record, output_dir)    
+    print(f"Prediction result is stored in {output_dir}")
 
 if __name__=='__main__':
     config_name = 'all_250'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_no_exp_diff_hyper/"),
+        'result_dir': Path(f"simulation_result/multi/{config_name}_test/"),
         'resume': False,
-        'resume_model_dir': Path(f"simulation_result/multi/{config_name}_test/"),
+        'resume_model_dir': Path(f"simulation_result/multi/{config_name}/"),
         'train': True,
-        'train_epochs': 2,
+        'train_epochs': 4,
         'train_steps': 1000,
         'validate': True,
-        'validate_steps': 1000,
+        'validate_steps': 200,
         'predict': True,
-        'predict_epochs': 5,
+        'predict_epochs': 4,
         'predict_steps': 1000,
         'actor_lr': 1e-3,
         'value_lr': 3e-3,
@@ -224,8 +251,18 @@ if __name__=='__main__':
 
     start_time = perf_counter()
     env_config = json.loads(model_config['config_path'].read_text())
-    train_model(model_config, env_config)
-    
+
+    if model_config['train']:
+        train_model(model_config, env_config)
+    else:
+        print('Skip training.')
+
+    if model_config['predict']:
+        predict_model(model_config, env_config)
+    else:
+        print('Skip predicting')
+
+    print("End the simulation")
 
     cost_time = str(timedelta(seconds = perf_counter() - start_time))
     
