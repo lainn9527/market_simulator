@@ -4,7 +4,7 @@ import math
 import random
 
 from algorithm.actor_critic import ActorCritic
-from algorithm.ppo_entropy import PPO
+from algorithm.ppo import PPO
 from core import agent
 
 class BaseAgent:
@@ -77,39 +77,53 @@ class BaseAgent:
         del self.agent_states[:]
         del self.rl.buffer[:]
 
+    # def action_wrapper(self, action, state):
+    #     act = action[0]
+    #     volume_high = max(1, round(0.1 * state['agent']['TSMC']))
+    #     ticks = random.randint(0, 5)
+    #     volume = random.randint(1, 5)
+    #     return [act, ticks, volume]
+
     def action_wrapper(self, action, state):
         act = action[0]
-        small_tick_low = 0
-        small_tick_high = 10
-        big_tick_low = 10
-        big_tick_high = 20
-        small_volume_low = 1
-        small_volume_high = 10
-        big_volume_low = 10
-        big_volume_high = 20
+        volume_high = max(1, round(0.1 * state['agent']['TSMC']))
+        ticks = random.randint(0, 10)
+        volume = random.randint(1, volume_high)
+        return [act, ticks, volume]
 
-        if act == 0:
-            bid_or_ask = 0
-            tick = random.randint(small_tick_low, small_tick_high)
-            volume = random.randint(small_volume_low, small_volume_high)
-        elif act == 1:
-            bid_or_ask = 0
-            tick = random.randint(big_tick_low, big_tick_high)
-            volume = random.randint(big_volume_low, big_volume_high)
-        elif act == 2:
-            bid_or_ask = 1
-            tick = random.randint(small_tick_low, small_tick_high)
-            volume = random.randint(small_volume_low, small_volume_high)
-        elif act == 3:
-            bid_or_ask = 1
-            tick = random.randint(big_tick_low, big_tick_high)
-            volume = random.randint(big_volume_low, big_volume_high)
-        elif act == 4:
-            bid_or_ask = 2
-            tick = 0
-            volume = 0
+    # def action_wrapper(self, action, state):
+    #     act = action[0]
+    #     small_tick_low = 0
+    #     small_tick_high = 10
+    #     big_tick_low = 10
+    #     big_tick_high = 20
+    #     small_volume_low = 1
+    #     small_volume_high = 10
+    #     big_volume_low = 10
+    #     big_volume_high = 20
 
-        return [bid_or_ask, tick, volume]
+    #     if act == 0:
+    #         bid_or_ask = 0
+    #         tick = random.randint(small_tick_low, small_tick_high)
+    #         volume = random.randint(small_volume_low, small_volume_high)
+    #     elif act == 1:
+    #         bid_or_ask = 0
+    #         tick = random.randint(big_tick_low, big_tick_high)
+    #         volume = random.randint(big_volume_low, big_volume_high)
+    #     elif act == 2:
+    #         bid_or_ask = 1
+    #         tick = random.randint(small_tick_low, small_tick_high)
+    #         volume = random.randint(small_volume_low, small_volume_high)
+    #     elif act == 3:
+    #         bid_or_ask = 1
+    #         tick = random.randint(big_tick_low, big_tick_high)
+    #         volume = random.randint(big_volume_low, big_volume_high)
+    #     elif act == 4:
+    #         bid_or_ask = 2
+    #         tick = 0
+    #         volume = 0
+
+    #     return [bid_or_ask, tick, volume]
 
 
     def obs_wrapper(self, obs):
@@ -123,6 +137,35 @@ class BaseAgent:
         self.reward_weight['action'] -= decay_weight
         self.reward_weight['strategy'] += strategy_weight * decay_weight
         self.reward_weight['wealth'] += wealth_weight * decay_weight
+
+    def get_wealth_reward(self, next_state):
+        risk_free_rate = next_state['market']['risk_free_rate']
+        wealth_weight = self.wealth_weight
+        short_steps = 20
+        mid_steps = 60
+        long_steps = 250
+        total_steps = len(next_state['market']['price'])
+        present_wealth = next_state['agent']['wealth']
+        base_wealth = self.agent_states[0]['wealth']
+        short_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-short_steps:]]
+        short_wealths = sum(short_wealths) / len(short_wealths)
+        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-mid_steps:]]
+        mid_wealth = sum(mid_wealths) / len(mid_wealths)
+        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-long_steps:]]
+        long_wealth = sum(long_wealths) / len(long_wealths)
+        
+        short_change = (present_wealth - short_wealths) / short_wealths - (pow(1+risk_free_rate, short_steps) - 1)
+        mid_change = (present_wealth - mid_wealth) / mid_wealth - (pow(1+risk_free_rate, mid_steps) - 1)
+        long_change = (present_wealth - long_wealth) / long_wealth - (pow(1+risk_free_rate, long_steps) - 1)
+        base_change = (present_wealth - base_wealth) / base_wealth - (pow(1+risk_free_rate, total_steps) - 1)
+
+        # short_change = (present_wealth - short_wealths) / short_wealths - short_steps * risk_free_rate
+        # mid_change = (present_wealth - mid_wealth) / mid_wealth - mid_steps * risk_free_rate
+        # long_change = (present_wealth - long_wealth) / long_wealth - long_steps * risk_free_rate
+        # base_change = (present_wealth - base_wealth) / base_wealth - total_steps * risk_free_rate
+
+        wealth_reward = self.reward_weight['wealth'] * 10 * (wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change)
+        return wealth_reward
 
 
     def reward_wrapper(self, action, next_state):
@@ -189,30 +232,13 @@ class TrendAgent(BaseAgent):
 
 
         # wealth reward
-        wealth_weight = self.wealth_weight
-        short_steps = 20
-        mid_steps = 60
-        long_steps = 250
-        total_steps = len(self.agent_states)
-        present_wealth = next_state['agent']['wealth']
-        base_wealth = self.agent_states[0]['wealth']
-        short_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-short_steps:]]
-        short_wealths = sum(short_wealths) / len(short_wealths)
-        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-mid_steps:]]
-        mid_wealth = sum(mid_wealths) / len(mid_wealths)
-        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-long_steps:]]
-        long_wealth = sum(long_wealths) / len(long_wealths)
-        
-        short_change = (present_wealth - short_wealths) / short_wealths - (pow(1+risk_free_rate, short_steps) - 1)
-        mid_change = (present_wealth - mid_wealth) / mid_wealth - (pow(1+risk_free_rate, mid_steps) - 1)
-        long_change = (present_wealth - long_wealth) / long_wealth - (pow(1+risk_free_rate, long_steps) - 1)
-        base_change = (present_wealth - base_wealth) / base_wealth - (pow(1+risk_free_rate, total_steps) - 1)
-        # 2 times wealth got reward 10
-        wealth_reward = self.reward_weight['wealth'] * 10 * (wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change)
-        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        wealth_reward = self.get_wealth_reward(next_state)
 
-        # self.reward_dacay(decay_rate = 0.9, strategy_weight = 0.7, wealth_weight = 0.3)
-        return {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
+        
+        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        return reward
 
     def final_reward(self):
         pass
@@ -270,31 +296,12 @@ class ValueAgent(BaseAgent):
 
 
         # wealth reward
-        risk_free_rate = next_state['market']['risk_free_rate']
-        wealth_weight = self.wealth_weight
-        short_steps = 20
-        mid_steps = 60
-        long_steps = 250
-        total_steps = len(next_state['market']['price'])
-        present_wealth = next_state['agent']['wealth']
-        base_wealth = self.agent_states[0]['wealth']
-        short_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-short_steps:]]
-        short_wealths = sum(short_wealths) / len(short_wealths)
-        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-mid_steps:]]
-        mid_wealth = sum(mid_wealths) / len(mid_wealths)
-        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-long_steps:]]
-        long_wealth = sum(long_wealths) / len(long_wealths)
-        
-        short_change = (present_wealth - short_wealths) / short_wealths - (pow(1+risk_free_rate, short_steps) - 1)
-        mid_change = (present_wealth - mid_wealth) / mid_wealth - (pow(1+risk_free_rate, mid_steps) - 1)
-        long_change = (present_wealth - long_wealth) / long_wealth - (pow(1+risk_free_rate, long_steps) - 1)
-        base_change = (present_wealth - base_wealth) / base_wealth - (pow(1+risk_free_rate, total_steps) - 1)
-        wealth_reward = self.reward_weight['wealth'] * 10 * (wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change)
-        
-        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        wealth_reward = self.get_wealth_reward(next_state)
 
-        return {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
-        # return strategy_reward
+        reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
+        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        return reward
 
 class ScalingAgent(BaseAgent):
     def __init__(self, algorithm, observation_space, action_space, device, wealth_weight=[0.35, 0.25, 0.25, 0.15], actor_lr=0.001, value_lr=0.003, batch_size=32, buffer_size=45, n_epoch=10):
@@ -302,6 +309,17 @@ class ScalingAgent(BaseAgent):
         self.reward_weight = {'action': 0, 'strategy': 0.6, 'wealth': 0.4}
         self.time_delta = 0
         self.fundamentalist_discount = 0.75
+        self.return_rate_range = 20
+        
+        self.time_delta = 0
+        self.v_1 = 2
+        self.v_2 = 0.6
+        self.beta = 4
+        self.alpha_1 = 0.6
+        self.alpha_2 = 1.5
+        self.alpha_3 = 1
+        self.fundamentalist_discount = 0.75
+        self.precision = 100
         self.return_rate_range = 20
 
     # def action_wrapper(self, action, state):
@@ -319,7 +337,21 @@ class ScalingAgent(BaseAgent):
     #             action[0] = 2
 
     #     return action
+    def action_wrapper(self, action, state):
+        current_price = state['market']['price'][-1]
+        current_value = state['market']['value'][-1]
 
+        if action[0] == 0 or action[0] == 1:
+            pass
+        if action[0] == 2:
+            if current_value > current_price:
+                action[0] = 0
+            elif current_value < current_price:
+                action[0] = 1
+            else:
+                action[0] = 2
+
+        return super().action_wrapper(action, state)
 
     def obs_wrapper(self, obs):
         # market states with normalization
@@ -329,8 +361,11 @@ class ScalingAgent(BaseAgent):
         current_value = obs['market']['value'][-1]
         d_p = np.diff(obs['market']['price'][-self.return_rate_range:]).mean().item()
 
-        opt_chartist_profit = (dividends + d_p) / current_price - risk_free_rate
-        pes_chartist_profit = risk_free_rate - (dividends + d_p) / current_price
+        # opt_chartist_profit = (dividends + d_p) / current_price - risk_free_rate
+        # pes_chartist_profit = risk_free_rate - (dividends + d_p) / current_price
+        # fundamentalist_profit = self.fundamentalist_discount * abs( (current_value - current_price) / current_price)
+        opt_chartist_profit = (dividends + (1 / self.v_2)*d_p) / current_price - risk_free_rate
+        pes_chartist_profit = risk_free_rate - (dividends + (1 / self.v_2)*d_p) / current_price
         fundamentalist_profit = self.fundamentalist_discount * abs( (current_value - current_price) / current_price)
 
         wealth = obs['agent']['wealth']
@@ -363,27 +398,9 @@ class ScalingAgent(BaseAgent):
 
 
         # wealth reward
-        risk_free_rate = next_state['market']['risk_free_rate']
-        wealth_weight = self.wealth_weight
-        short_steps = 20
-        mid_steps = 60
-        long_steps = 250
-        total_steps = len(next_state['market']['price'])
-        present_wealth = next_state['agent']['wealth']
-        base_wealth = self.agent_states[0]['wealth']
-        short_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-short_steps:]]
-        short_wealths = sum(short_wealths) / len(short_wealths)
-        mid_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-mid_steps:]]
-        mid_wealth = sum(mid_wealths) / len(mid_wealths)
-        long_wealths = [present_wealth] + [state['wealth'] for state in self.agent_states[-long_steps:]]
-        long_wealth = sum(long_wealths) / len(long_wealths)
-        
-        short_change = (present_wealth - short_wealths) / short_wealths - (pow(1+risk_free_rate, short_steps) - 1)
-        mid_change = (present_wealth - mid_wealth) / mid_wealth - (pow(1+risk_free_rate, mid_steps) - 1)
-        long_change = (present_wealth - long_wealth) / long_wealth - (pow(1+risk_free_rate, long_steps) - 1)
-        base_change = (present_wealth - base_wealth) / base_wealth - (pow(1+risk_free_rate, total_steps) - 1)
-        wealth_reward = self.reward_weight['wealth'] * 10 * (wealth_weight['short']*short_change + wealth_weight['mid']*mid_change + wealth_weight['long']*long_change + wealth_weight['base']*base_change)
-        
-        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        wealth_reward = self.get_wealth_reward(next_state)
 
-        return {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
+        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        return reward

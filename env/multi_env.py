@@ -30,6 +30,8 @@ class MultiTradingEnv:
             pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
         
         pre_volume = [int(random.gauss(100, 10)*10) for i in range(249)]
+        # pre_price.reverse()
+        # pre_value.reverse()
         config['Market']['Securities']['TSMC']['value'] = pre_value
         config['Market']['Securities']['TSMC']['price'] = pre_price
         config['Market']['Securities']['TSMC']['volume'] = pre_volume
@@ -112,6 +114,7 @@ class MultiTradingEnv:
         n_epoch = 10
         buffer_size = 45
         batch_size = 32
+        action_spaces = [(3) for i in range(n_agent)]
 
         agents = []
         if agent_type == "trend":
@@ -121,7 +124,6 @@ class MultiTradingEnv:
                 min_look_back = config['min_look_back']
                 max_look_back = config['max_look_back']
                 look_backs = [random.randint(min_look_back, max_look_back) for i in range(n_agent)]
-            action_spaces = [(5) for i in range(n_agent)]
             observation_spaces = [4 for i in range(n_agent)]
 
             for i in range(n_agent):
@@ -144,7 +146,6 @@ class MultiTradingEnv:
             # record
             config['look_backs'] = look_backs
         elif agent_type == "value":
-            action_spaces = [(5) for i in range(n_agent)]
             observation_spaces = [4 for i in range(n_agent)]
             for i in range(n_agent):
                 # buffer_size = max(min_buffer_size, max_buffer_size)
@@ -165,7 +166,6 @@ class MultiTradingEnv:
                 agents.append(value_agent)
 
         elif agent_type == "scale":
-            action_spaces = [(5) for i in range(n_agent)]
             observation_spaces = [4 for i in range(n_agent)]
             for i in range(n_agent):
                 # buffer_size = max(min_buffer_size, max_buffer_size)

@@ -36,7 +36,7 @@ class PPO(nn.Module):
         self.gamma = 0.99
         self.clip_range = 0.2
         self.value_coef = 0.5
-        self.entropy_coef = 0.05
+        self.entropy_coef = 0
         self.training_step = 0
 
 

@@ -227,11 +227,11 @@ if __name__=='__main__':
     config_name = 'all_250'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_test/"),
+        'result_dir': Path(f"simulation_result/multi/{config_name}_%volume_truewealthreward_wealthobs_randomwealthweight_samepv_lowstep/"),
         'resume': False,
         'resume_model_dir': Path(f"simulation_result/multi/{config_name}/"),
         'train': True,
-        'train_epochs': 4,
+        'train_epochs': 2,
         'train_steps': 1000,
         'validate': True,
         'validate_steps': 200,
