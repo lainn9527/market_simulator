@@ -22,7 +22,8 @@ def train_model(train_config: Dict, env_config: Dict):
         train_config['result_dir'].mkdir()
     train_output_dir = train_config['result_dir'] / 'train'
     validate_output_dir = train_config['result_dir'] / 'validate'
-    predict_output_dir = train_config['result_dir'] / 'predict'
+    model_output_dir = train_config['result_dir'] / 'model'
+    model_output_dir.mkdir(exist_ok = True, parents = True)
 
     random_seed = 9528
     np.random.seed(random_seed)
@@ -102,8 +103,7 @@ def train_model(train_config: Dict, env_config: Dict):
         print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
 
         # store the agents
-        model_output_path = train_config['result_dir'] / 'model.pkl'
-        multi_env.store_agents(model_output_path)
+        multi_env.store_agents(model_output_dir / f'sim_{t}.pkl')
         
 
         # validate
@@ -181,7 +181,7 @@ def predict_model(train_config: Dict, env_config: Dict):
     n_epochs = train_config['predict_epochs']
     n_steps = train_config['predict_steps']
     args_list = [(predict_output_dir / f"sim_{i}", n_steps, agents, multi_env, random_seed+i, ) for i in range(n_epochs)]
-    with Pool(6) as p:
+    with Pool(8) as p:
         p.starmap(predict, args_list)
 
 
@@ -224,20 +224,20 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
     print(f"Prediction result is stored in {output_dir}")
 
 if __name__=='__main__':
-    config_name = 'all_250'
+    config_name = 'trsc_500'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_%volume_truewealthreward_wealthobs_randomwealthweight_samepv_lowstep/"),
-        'resume': False,
-        'resume_model_dir': Path(f"simulation_result/multi/{config_name}/"),
-        'train': True,
-        'train_epochs': 2,
+        'result_dir': Path(f"simulation_result/multi/{config_name}_highvalue/"),
+        'resume': True,
+        'resume_model_dir': Path(f"simulation_result/multi/{config_name}/model/sim_1/"),
+        'train': False,
+        'train_epochs': 3,
         'train_steps': 1000,
         'validate': True,
         'validate_steps': 200,
         'predict': True,
-        'predict_epochs': 4,
-        'predict_steps': 1000,
+        'predict_epochs': 7,
+        'predict_steps': 2500,
         'actor_lr': 1e-3,
         'value_lr': 3e-3,
         'batch_size': 32,

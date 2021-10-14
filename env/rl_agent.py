@@ -187,11 +187,11 @@ class TrendAgent(BaseAgent):
         return_rate_range = self.look_back
         current_price = obs['market']['price'][-1]
         current_volume = obs['market']['volume'][-1]
-        d_p = np.diff(obs['market']['price'][-return_rate_range:]).mean().item()
+        d_p = np.diff(obs['market']['price'][-return_rate_range:]).sum().item()
         return_rate = d_p / current_price
 
-        wealth = obs['agent']['wealth']
-        states = np.array([math.exp(return_rate), current_price, current_volume, wealth], np.float32)
+        wealth_utility = self.get_wealth_reward(obs)
+        states = np.array([math.exp(return_rate), current_price, current_volume, wealth_utility], np.float32)
         norm_states = (states - states.mean()) / states.std()
         return norm_states
 
@@ -236,8 +236,8 @@ class TrendAgent(BaseAgent):
 
         reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
         
-        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
-        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
         return reward
 
     def final_reward(self):
@@ -259,11 +259,14 @@ class ValueAgent(BaseAgent):
         current_price = obs['market']['price'][-1]
         current_value = obs['market']['value'][-1]
         fundamentalist_profit = self.fundamentalist_discount * abs( (current_value - current_price) / current_price)
+        gap = (current_price - current_value) / current_price
 
-        wealth = obs['agent']['wealth']
-        states = np.array( [current_price, current_value, math.exp(fundamentalist_profit), wealth], np.float32)
-        norm_states = (states - states.mean()) / states.std()
-        return norm_states
+        wealth_utility = self.get_wealth_reward(obs)
+        states = np.array( [current_price, current_value, math.exp(fundamentalist_profit), wealth_utility], np.float32)
+        states = np.array( [current_price, current_value, wealth_utility], np.float32)
+        # states = np.array( [gap], np.float32)
+        # norm_states = (states - states.mean()) / states.std()
+        return states
  
     def reward_dacay(self, decay_rate, strategy_weight, wealth_weight):
         if self.reward_weight['action'] < 0.001:
@@ -283,24 +286,21 @@ class ValueAgent(BaseAgent):
         volume = action[2]
 
         if gap > 0 and bid_or_ask == 0 or gap < 0 and bid_or_ask == 1:
-            strategy_reward = - (ticks + volume) * abs(gap)
+            strategy_reward = - abs(gap)
         elif gap > 0 and bid_or_ask == 1 or gap < 0 and bid_or_ask == 0:
-            strategy_reward = (ticks + volume) * abs(gap)
-        elif gap == 0 and bid_or_ask != 2:
-            strategy_reward = -1
-        elif bid_or_ask == 2:
-            if gap == 0:
-                strategy_reward = 1
-            else:
-                strategy_reward = -abs(gap) * 5
+            strategy_reward = abs(gap)
+        else:
+            strategy_reward = 0
+
 
 
         # wealth reward
         wealth_reward = self.get_wealth_reward(next_state)
 
+        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
         reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
-        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
-        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        reward = {'weighted_reward': strategy_reward, 'strategy_reward': strategy_reward, 'wealth_reward': 0}
         return reward
 
 class ScalingAgent(BaseAgent):
@@ -368,8 +368,8 @@ class ScalingAgent(BaseAgent):
         pes_chartist_profit = risk_free_rate - (dividends + (1 / self.v_2)*d_p) / current_price
         fundamentalist_profit = self.fundamentalist_discount * abs( (current_value - current_price) / current_price)
 
-        wealth = obs['agent']['wealth']
-        utilities = [math.exp(opt_chartist_profit), math.exp(pes_chartist_profit), math.exp(fundamentalist_profit), wealth]
+        wealth_utility = self.get_wealth_reward(obs)
+        utilities = [math.exp(opt_chartist_profit), math.exp(pes_chartist_profit), math.exp(fundamentalist_profit), wealth_utility]
         # utilities = [opt_chartist_profit, pes_chartist_profit, fundamentalist_profit]
 
         states = np.array(utilities, np.float32)
@@ -400,6 +400,7 @@ class ScalingAgent(BaseAgent):
         # wealth reward
         wealth_reward = self.get_wealth_reward(next_state)
 
+        # reward = {'weighted_reward': strategy_reward, 'strategy_reward': 0, 'wealth_reward': strategy_reward}
         reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
         # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
         # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}

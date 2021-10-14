@@ -146,7 +146,7 @@ class MultiTradingEnv:
             # record
             config['look_backs'] = look_backs
         elif agent_type == "value":
-            observation_spaces = [4 for i in range(n_agent)]
+            observation_spaces = [1 for i in range(n_agent)]
             for i in range(n_agent):
                 # buffer_size = max(min_buffer_size, max_buffer_size)
                 # batch_size = random.randint(min_batch_size, buffer_size)

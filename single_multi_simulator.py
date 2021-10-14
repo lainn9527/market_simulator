@@ -174,7 +174,7 @@ def train_model(train_config: Dict, env_config: Dict):
                     rl_records[agent_id]['actions'].append(actions[agent_id])
                 
                 states = next_states
-                if i % 10 == 0:
+                if i % 1 == 0:
                     multi_env.render(i)
 
                 if done:
@@ -197,19 +197,19 @@ def train_model(train_config: Dict, env_config: Dict):
 
 
 if __name__=='__main__':
-    config_name = 'scaling_500_no_rule'
+    config_name = 'all_250'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_entropy_random_wealth_weight/"),
-        'resume': False,
-        'resume_model_dir': Path(f"simulation_result/multi/{config_name}_test/"),
-        'train': True,
-        'train_epochs': 2,
+        'result_dir': Path(f"simulation_result/multi/{config_name}_test/"),
+        'resume': True,
+        'resume_model_dir': Path(f"simulation_result/multi/{config_name}/"),
+        'train': False,
+        'train_epochs': 1,
         'train_steps': 1000,
         'validate': True,
-        'validate_steps': 1000,
+        'validate_steps': 200,
         'predict': True,
-        'predict_epochs': 5,
+        'predict_epochs': 4,
         'predict_steps': 1000,
         'actor_lr': 1e-3,
         'value_lr': 3e-3,

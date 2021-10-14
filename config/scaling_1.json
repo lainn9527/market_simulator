@@ -5,7 +5,7 @@
     },
     "Market":{
         "Structure": {
-            "interest_rate": 0.0004,
+            "interest_rate": 0.0002,
             "interest_period": 1,
             "clear_period": 200,
             "transaction_rate": 0.002,
@@ -68,28 +68,6 @@
             }
         ],
         "RLAgent": [
-            {
-                "name": "ppo_tr",
-                "type": "trend",
-                "algorithm": "ppo",
-                "number": 1,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                },
-                "min_look_back": 20,
-                "max_look_back": 21
-            },
-            {
-                "name": "ppo_va",
-                "type": "value",
-                "algorithm": "ppo",
-                "number": 1,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                }
-            },
             {
                 "name": "ppo_sc",
                 "type": "scale",
