@@ -69,28 +69,6 @@
         ],
         "RLAgent": [
             {
-                "name": "ppo_tr",
-                "type": "trend",
-                "algorithm": "ppo",
-                "number": 1,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                },
-                "min_look_back": 20,
-                "max_look_back": 21
-            },
-            {
-                "name": "ppo_va",
-                "type": "value",
-                "algorithm": "ppo",
-                "number": 1,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                }
-            },
-            {
                 "name": "ppo_sc",
                 "type": "scale",
                 "algorithm": "ppo",

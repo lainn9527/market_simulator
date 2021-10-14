@@ -103,7 +103,7 @@ def train_model(train_config: Dict, env_config: Dict):
         print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
 
         # store the agents
-        multi_env.store_agents(model_output_dir / f'sim_{t}.pkl')
+        multi_env.store_agents(model_output_dir / f'sim_{t}')
         
 
         # validate
@@ -181,7 +181,7 @@ def predict_model(train_config: Dict, env_config: Dict):
     n_epochs = train_config['predict_epochs']
     n_steps = train_config['predict_steps']
     args_list = [(predict_output_dir / f"sim_{i}", n_steps, agents, multi_env, random_seed+i, ) for i in range(n_epochs)]
-    with Pool(8) as p:
+    with Pool(6) as p:
         p.starmap(predict, args_list)
 
 
@@ -224,12 +224,12 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
     print(f"Prediction result is stored in {output_dir}")
 
 if __name__=='__main__':
-    config_name = 'trsc_500'
+    config_name = 'scaling_250_rule'
     model_config = {
         'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/{config_name}_highvalue/"),
+        'result_dir': Path(f"simulation_result/multi/norule_highvalue_moreactions/"),
         'resume': True,
-        'resume_model_dir': Path(f"simulation_result/multi/{config_name}/model/sim_1/"),
+        'resume_model_dir': Path(f"simulation_result/multi/{config_name}_highvalue_moreactions/model/sim_1/"),
         'train': False,
         'train_epochs': 3,
         'train_steps': 1000,

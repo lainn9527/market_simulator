@@ -84,48 +84,48 @@ class BaseAgent:
     #     volume = random.randint(1, 5)
     #     return [act, ticks, volume]
 
-    def action_wrapper(self, action, state):
-        act = action[0]
-        volume_high = max(1, round(0.1 * state['agent']['TSMC']))
-        ticks = random.randint(0, 10)
-        volume = random.randint(1, volume_high)
-        return [act, ticks, volume]
-
     # def action_wrapper(self, action, state):
     #     act = action[0]
-    #     small_tick_low = 0
-    #     small_tick_high = 10
-    #     big_tick_low = 10
-    #     big_tick_high = 20
-    #     small_volume_low = 1
-    #     small_volume_high = 10
-    #     big_volume_low = 10
-    #     big_volume_high = 20
+    #     volume_high = max(1, round(0.1 * state['agent']['TSMC']))
+    #     ticks = random.randint(0, 10)
+    #     volume = random.randint(1, volume_high)
+    #     return [act, ticks, volume]
 
-    #     if act == 0:
-    #         bid_or_ask = 0
-    #         tick = random.randint(small_tick_low, small_tick_high)
-    #         volume = random.randint(small_volume_low, small_volume_high)
-    #     elif act == 1:
-    #         bid_or_ask = 0
-    #         tick = random.randint(big_tick_low, big_tick_high)
-    #         volume = random.randint(big_volume_low, big_volume_high)
-    #     elif act == 2:
-    #         bid_or_ask = 1
-    #         tick = random.randint(small_tick_low, small_tick_high)
-    #         volume = random.randint(small_volume_low, small_volume_high)
-    #     elif act == 3:
-    #         bid_or_ask = 1
-    #         tick = random.randint(big_tick_low, big_tick_high)
-    #         volume = random.randint(big_volume_low, big_volume_high)
-    #     elif act == 4:
-    #         bid_or_ask = 2
-    #         tick = 0
-    #         volume = 0
+    def action_wrapper(self, action, state):
+        act = action[0]
+        small_tick_low = 0
+        small_tick_high = 10
+        big_tick_low = 10
+        big_tick_high = 20
+        small_volume_low = 1
+        small_volume_high = 10
+        big_volume_low = 10
+        big_volume_high = 20
 
-    #     return [bid_or_ask, tick, volume]
+        if act == 0:
+            bid_or_ask = 0
+            tick = random.randint(small_tick_low, small_tick_high)
+            volume = random.randint(small_volume_low, small_volume_high)
+        elif act == 1:
+            bid_or_ask = 0
+            tick = random.randint(big_tick_low, big_tick_high)
+            volume = random.randint(big_volume_low, big_volume_high)
+        elif act == 2:
+            bid_or_ask = 1
+            tick = random.randint(small_tick_low, small_tick_high)
+            volume = random.randint(small_volume_low, small_volume_high)
+        elif act == 3:
+            bid_or_ask = 1
+            tick = random.randint(big_tick_low, big_tick_high)
+            volume = random.randint(big_volume_low, big_volume_high)
+        elif act == 4:
+            bid_or_ask = 2
+            tick = 0
+            volume = 0
 
+        return [bid_or_ask, tick, volume]
 
+        
     def obs_wrapper(self, obs):
         pass
 
@@ -223,10 +223,10 @@ class TrendAgent(BaseAgent):
         elif gap > 0 and bid_or_ask == 1 or gap < 0 and bid_or_ask == 0:
             strategy_reward = -(ticks + volume) * abs(gap)
         elif gap == 0 and bid_or_ask != 2:
-            strategy_reward = -1
+            strategy_reward = -abs(gap)
         elif bid_or_ask == 2:
             if gap == 0:
-                strategy_reward = 1
+                strategy_reward = abs(gap)
             else:
                 strategy_reward = -abs(gap) * 5
 
@@ -322,37 +322,6 @@ class ScalingAgent(BaseAgent):
         self.precision = 100
         self.return_rate_range = 20
 
-    # def action_wrapper(self, action, state):
-    #     current_price = state['market']['price'][-1]
-    #     current_value = state['market']['value'][-1]
-
-    #     if action[0] == 0 or action[0] == 1:
-    #         pass
-    #     if action[0] == 2:
-    #         if current_value > current_price:
-    #             action[0] = 0
-    #         elif current_value < current_price:
-    #             action[0] = 1
-    #         else:
-    #             action[0] = 2
-
-    #     return action
-    def action_wrapper(self, action, state):
-        current_price = state['market']['price'][-1]
-        current_value = state['market']['value'][-1]
-
-        if action[0] == 0 or action[0] == 1:
-            pass
-        if action[0] == 2:
-            if current_value > current_price:
-                action[0] = 0
-            elif current_value < current_price:
-                action[0] = 1
-            else:
-                action[0] = 2
-
-        return super().action_wrapper(action, state)
-
     def obs_wrapper(self, obs):
         # market states with normalization
         dividends = 0
@@ -389,10 +358,10 @@ class ScalingAgent(BaseAgent):
         elif gap > 0 and bid_or_ask == 1 or gap < 0 and bid_or_ask == 0:
             strategy_reward = (ticks + volume) * abs(gap)
         elif gap == 0 and bid_or_ask != 2:
-            strategy_reward = -1
+            strategy_reward = -abs(gap)
         elif bid_or_ask == 2:
             if gap == 0:
-                strategy_reward = 1
+                strategy_reward = abs(gap)
             else:
                 strategy_reward = -abs(gap) * 5
 
@@ -401,7 +370,7 @@ class ScalingAgent(BaseAgent):
         wealth_reward = self.get_wealth_reward(next_state)
 
         # reward = {'weighted_reward': strategy_reward, 'strategy_reward': 0, 'wealth_reward': strategy_reward}
-        reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
-        # weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
-        # reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
+        # reward = {'weighted_reward': wealth_reward, 'strategy_reward': 0, 'wealth_reward': wealth_reward}
+        weighted_reward = self.reward_weight['strategy'] * strategy_reward + self.reward_weight['wealth'] * wealth_reward
+        reward = {'weighted_reward': weighted_reward, 'strategy_reward': strategy_reward, 'wealth_reward': wealth_reward}
         return reward

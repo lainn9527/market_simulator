@@ -114,7 +114,7 @@ class MultiTradingEnv:
         n_epoch = 10
         buffer_size = 45
         batch_size = 32
-        action_spaces = [(3) for i in range(n_agent)]
+        action_spaces = [(5) for i in range(n_agent)]
 
         agents = []
         if agent_type == "trend":
@@ -189,6 +189,11 @@ class MultiTradingEnv:
         return group_name, agents
 
     def store_agents(self, model_output_path):
+        if not model_output_path.exists():
+            model_output_path.mkdir(exist_ok = True, parents = True)
+
+        model_output_path = model_output_path / 'model.pkl'
+        
         state_dicts = {}
         for name, agents in self.group_agents.items():
             for i, agent in enumerate(agents):
