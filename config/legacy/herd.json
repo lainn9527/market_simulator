@@ -123,23 +123,5 @@
                 "cash": 10000000
             }
         ]
-    },
-
-    "Env":{
-        "agent": {
-            "name": "rl_1",
-            "id": "RL",
-            "cash": 100000,
-            "securities": {
-                "TSMC": 1
-            }
-        },
-        "obs": {
-            "lookback": 10,
-            "best_price": 5
-        }
-    },
-    "Train": {
-        
     }
 }

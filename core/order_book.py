@@ -67,18 +67,11 @@ class OrderBook:
         self.dividend_record = dict()
 
     def set_price(self):
-        # base price for call auction in the open session
-        # use the close price of previous day as the base price and if it's the first day, use the fundamental value instead
         base_price = self.value
-
-        # initalize the valid price list
-        # self.bids_price.append(base_price)
-        # self.asks_price.append(base_price)
-        # point to the base price
         self.tick_size = self.market.determine_tick_size(base_price)
-        record_list = ['open', 'high', 'low', 'close', 'average', 'volume', 'amount', 'bid', 'ask', 'price_volume', 'bid_five_price', 'ask_five_price']
+        record_list = ['value', 'open', 'high', 'low', 'close', 'average', 'volume', 'amount', 'bid', 'ask', 'price_volume', 'bid_five_price', 'ask_five_price']
         self.steps_record.update({key: [] for key in record_list})
-        self.update_record(**{'price': base_price, 'volume': 0, 'amount': 0})
+        self.update_record(**{'value': self.value, 'price': base_price, 'volume': 0, 'amount': 0})
 
     def handle_limit_order(self, order) -> str:
         '''
@@ -432,13 +425,12 @@ class OrderBook:
         if 'open' not in self.current_record.keys():
             self.current_record['open'] = name_val['price']
         self.current_record['price'] = name_val['price']
-        self.current_record['high'] = max(
-            self.current_record['high'], name_val['price'])
+        self.current_record['high'] = max(self.current_record['high'], name_val['price'])
         if 'low' not in self.current_record.keys():
             self.current_record['low'] = name_val['price']
         else:
-            self.current_record['low'] = min(
-                self.current_record['low'], name_val['price'])
+            self.current_record['low'] = min(self.current_record['low'], name_val['price'])
+        self.current_record['value'] = name_val['value']
         self.current_record['volume'] += name_val['volume']
         self.current_record['amount'] += name_val['amount']
 
@@ -456,8 +448,9 @@ class OrderBook:
             self.steps_record[key].append(self.current_record[key])
 
         self.current_record = defaultdict(float)
-        self.update_record(
-            **{'price': self.steps_record['close'][-1], 'volume': 0, 'amount': 0})
+        updated_info = {'value': self.steps_record['value'][-1], 'price': self.steps_record['close'][-1], 'volume': 0, 'amount': 0}
+
+        self.update_record(**updated_info)
 
     def clear_orders(self):
         for order_id in self.current_orders[:]:
@@ -470,6 +463,10 @@ class OrderBook:
 
     def get_order(self, order_id):
         return self.orders[order_id]
+
+    def adjust_value(self, v):
+        self.current_record['value'] = v
+
 
     def _generate_order_id(self):
         self.num_of_order += 1
@@ -486,6 +483,8 @@ class CallOrderBook(OrderBook):
         self.steps_record['ask'] = []
         self.steps_record['bid_five_price'] = []
         self.steps_record['ask_five_price'] = []
+        self.steps_record['last_filled_bid_price'] = []
+        self.steps_record['last_filled_ask_price'] = []
         
     
     def set_price(self):
@@ -569,6 +568,7 @@ class CallOrderBook(OrderBook):
                 bid_quantity = self.orders[bid_order_id].order.quantity
                 self.fill_order(bid_order_id, match_price, min(bid_quantity, last_bid_remain))
                 last_bid_remain -= bid_quantity
+                last_filled_bid_price = bid_price
                 if last_bid_remain <= 0:
                     break
 
@@ -580,6 +580,7 @@ class CallOrderBook(OrderBook):
                 ask_quantity = self.orders[ask_order_id].order.quantity
                 self.fill_order(ask_order_id, match_price, min(ask_quantity, last_ask_remain))
                 last_ask_remain -= ask_quantity
+                last_filled_ask_price = ask_price
                 if last_ask_remain <= 0:
                     break
 
@@ -588,7 +589,10 @@ class CallOrderBook(OrderBook):
                         'volume': match_volume,
                         'amount': round(match_price * match_volume, 2),
                         'bid': self.bids_sum,
-                        'ask': self.asks_sum,}
+                        'ask': self.asks_sum,
+                        'last_filled_bid_price': last_filled_bid_price,
+                        'last_filled_ask_price': last_filled_ask_price
+                    }
         
         return updated_info
 
@@ -603,16 +607,13 @@ class CallOrderBook(OrderBook):
     def clear_orders(self):
         for order_id in self.current_orders[:]:
             self.cancel_order(order_id)
-
-    def adjust_value(self, v):
-        self.current_record['value'] = v
     
     def update_record(self, **name_val):
         self.current_record.update(name_val)
 
     def step_summarize(self):
-        self.current_record['bid_five_price'] = {price: self.bids_volume[price] for price in self.bids_price[:5]}
-        self.current_record['ask_five_price'] = {price: self.asks_volume[price] for price in self.asks_price[:5]}
+        self.current_record['bid_five_price'] = [price for price in self.bids_price[:5]]
+        self.current_record['ask_five_price'] = [price for price in self.asks_price[:5]]
         for key in self.steps_record.keys():
             self.steps_record[key].append(self.current_record[key])
 

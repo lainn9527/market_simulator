@@ -3,6 +3,8 @@ from collections import defaultdict
 import numpy as np
 import random
 import json
+import math
+
 from time import perf_counter
 from datetime import timedelta
 from pathlib import Path
@@ -25,25 +27,30 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     num_of_timesteps = timestep
     start_time = perf_counter()
     core = Core(config, market_type="call")
-    orderbooks, agent_manager = core.run(num_simulation = 1, num_of_timesteps = num_of_timesteps)
+    orderbooks, agent_manager = core.call_run(num_simulation = 1, num_of_timesteps = num_of_timesteps)
     write_records(orderbooks, agent_manager, result_dir)
     cost_time = str(timedelta(seconds = perf_counter() - start_time))
     print(f"Run {num_of_timesteps} in {cost_time}.")
     
 
 if __name__ == '__main__':
-    config_path = Path("config/scaling.json")
-    config = json.loads(config_path.read_text())
-    pre_value = [config['Market']['Securities']['TSMC']['value']]
-    pre_price = [config['Market']['Securities']['TSMC']['value']]
-    for i in range(249):
-        pre_value.append(pre_value[-1] + round(random.gauss(0, 0.5), 1))
-        pre_price.append(pre_price[-1] + round(random.gauss(0, 1), 1))
-    pre_volume = [int(random.gauss(100, 10)*10) for i in range(249)]
+    for t in range(5):
+        config_path = Path("config/rule.json")
+        config = json.loads(config_path.read_text())
+        pre_value = [config['Market']['Securities']['TSMC']['value']]
+        pre_price = [config['Market']['Securities']['TSMC']['value']]
+        pre_volume = [int(random.gauss(100, 10)*10) for i in range(100)]
+        
+        for i in range(100):
+            pre_value.append(round(math.exp(math.log(pre_value[-1]) + random.gauss(0, 0.005)), 1))
+            pre_price.append(round(math.exp(math.log(pre_price[-1]) + random.gauss(0, 0.005)), 1))
+        
+        config['Market']['Securities']['TSMC']['value'] = pre_value
+        config['Market']['Securities']['TSMC']['price'] = pre_price
+        config['Market']['Securities']['TSMC']['volume'] = pre_volume
 
-    config['Market']['Securities']['TSMC']['value'] = pre_value
-    config['Market']['Securities']['TSMC']['price'] = pre_price
-    config['Market']['Securities']['TSMC']['volume'] = pre_volume
-    experiment_name = 'call'
-    result_dir = Path("result") / experiment_name
-    simulate(result_dir / 'test', 2500, config, random_seed=9528)
+        experiment_name = 'fund'
+        result_dir = Path(f"simulation_result/call/") / experiment_name / f'sim_{t}'
+        simulate(result_dir, 2000, config, random_seed=100)
+
+

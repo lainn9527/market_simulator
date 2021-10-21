@@ -42,6 +42,7 @@ def train_model(train_config: Dict, env_config: Dict):
                                     train_config['value_lr'],
                                     train_config['batch_size'],
                                     train_config['buffer_size'],
+                                    train_config['n_epoch'],
                                     train_config['device'],
                                     train_config['resume'],
                                     train_config['resume_model_dir']
@@ -85,7 +86,7 @@ def train_model(train_config: Dict, env_config: Dict):
                     rl_records[agent_id]['value_loss'] += loss['value_loss']
             
             states = next_states
-            if i % 10 == 0:
+            if i % 1 == 0:
                 multi_env.render(i)
             
             if done:
@@ -103,7 +104,7 @@ def train_model(train_config: Dict, env_config: Dict):
         print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
 
         # store the agents
-        multi_env.store_agents(model_output_dir / f'sim_{t}')
+        multi_env.store_agents(model_output_dir / f'sim_{t}', env_config)
         
 
         # validate
@@ -116,7 +117,7 @@ def train_model(train_config: Dict, env_config: Dict):
                 # collect actions
                 obs, actions = {}, {}
                 for agent_id, agent in zip(agent_ids, agents):
-                    obs[agent_id], actions[agent_id] = agent.predict(states[agent_id])
+                    obs[agent_id], actions[agent_id], _ = agent.get_action(states[agent_id])
 
                 # rewards, next_steps
                 done, rewards, next_states, next_obs = multi_env.step(actions)
@@ -154,7 +155,7 @@ def predict_model(train_config: Dict, env_config: Dict):
 
     if train_config['train']:
         resume_config_path = train_config['result_dir'] / 'config.json'
-        resume_model_dir = train_config['result_dir']
+        resume_model_dir = train_config['result_dir'] / 'model' / 'sim_0'
     elif train_config['resume']:
         resume_config_path = train_config['resume_model_dir'] / 'config.json'
         resume_model_dir = train_config['resume_model_dir']
@@ -171,6 +172,7 @@ def predict_model(train_config: Dict, env_config: Dict):
                                     train_config['value_lr'],
                                     train_config['batch_size'],
                                     train_config['buffer_size'],
+                                    train_config['n_epoch'],
                                     train_config['device'],
                                     resume = True,
                                     resume_model_dir = resume_model_dir
@@ -198,7 +200,7 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
         # collect actions
         obs, actions = {}, {}
         for agent_id, agent in zip(agent_ids, agents):
-            obs[agent_id], actions[agent_id] = agent.predict(states[agent_id])
+            obs[agent_id], actions[agent_id], _ = agent.get_action(states[agent_id])
 
         # rewards, next_steps
         done, rewards, next_states, next_obs = multi_env.step(actions)
@@ -223,25 +225,28 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
     write_multi_records(predict_record, output_dir)    
     print(f"Prediction result is stored in {output_dir}")
 
+
 if __name__=='__main__':
-    config_name = 'scaling_250_rule'
+    experiment_name = 'rule_diffnumber_rl'
+    config_name = 'scaling_1'
     model_config = {
-        'config_path': Path(f"config/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/multi/norule_highvalue_moreactions/"),
-        'resume': True,
-        'resume_model_dir': Path(f"simulation_result/multi/{config_name}_highvalue_moreactions/model/sim_1/"),
-        'train': False,
-        'train_epochs': 3,
-        'train_steps': 1000,
+        'config_path': Path(f"config/{experiment_name}/{config_name}.json"),
+        'result_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}_wealth_reward/"),
+        'resume': False,
+        'resume_model_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}/model/sim_3/"),
+        'train': True,
+        'train_epochs': 4,
+        'train_steps': 2000,
         'validate': True,
         'validate_steps': 200,
-        'predict': True,
-        'predict_epochs': 7,
+        'predict': False,
+        'predict_epochs': 6,
         'predict_steps': 2500,
         'actor_lr': 1e-3,
         'value_lr': 3e-3,
         'batch_size': 32,
         'buffer_size': 45,
+        'n_epoch': 10,
         'device': 'cpu',
     }
     # 4:30 h = 270min = 16200s

@@ -2,6 +2,7 @@ import random
 from typing import Dict, List
 from collections import defaultdict
 from core import agent
+from core.agent import ScalingAgent
 from queue import Queue
 
 class AgentManager:
@@ -38,6 +39,17 @@ class AgentManager:
         while not self.core.queue_full() and not self.agent_queue.empty():
             agent_id = self.agent_queue.get()
             self.agents[agent_id].step()
+            
+        
+        self.update_record()
+
+    def call_step(self):
+        agent_ids = list(self.agents.keys())
+        random.shuffle(agent_ids)
+        for agent_id in agent_ids:
+            self.agents[agent_id].step()
+
+
         self.update_record()
 
     def env_step(self, action, rl_agent_id):
@@ -91,12 +103,18 @@ class AgentManager:
             records[group_name] = {code: round(value/len(agents), 2) for code, value in record.items() if code != 'group_bids_volume' or code != 'group_asks_volume'}
             records[group_name]['group_bids_volume'] = record['group_bids_volume']
             records[group_name]['group_asks_volume'] = record['group_asks_volume']
+        
+        # backdoor for number of scaling agent
+        records['sc_opt_125']['number'] = ScalingAgent.get_opt_number()
+        records['sc_pes_125']['number'] = ScalingAgent.get_pes_number()
+        records['sc_fud_250']['number'] = ScalingAgent.get_fud_number()
+        
         self.step_records.append(records)
 
     def get_init_states(self, group_name, number, cash, holdings, alpha):
         agent_ids = [f"{group_name}_{i}" for i in range(number)]
-        agent_cashes = [ max(int(cash * number * pow(rank+1, -(1/alpha))), 10000) for rank in range(number)]
-        agent_holdings = [{code: max(int(num * number * pow(rank+1, -(1/alpha))), 1) for code, num in holdings.items()} for rank in range(number)] 
+        agent_cashes = [ max(int(cash * pow(rank+1, -(1/alpha))), 10000) for rank in range(number)]
+        agent_holdings = [{code: max(int(num * pow(rank+1, -(1/alpha))), 1) for code, num in holdings.items()} for rank in range(number)] 
         agent_average_costs = [random.gauss(mu = 100, sigma = 10) for _ in range(number)]
         risk_preferences = [random.gauss(mu = self.global_config['risk_preference_mean'], sigma = self.global_config['risk_preference_var']) for i in range(number)]
 

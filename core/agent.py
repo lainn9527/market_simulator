@@ -58,7 +58,7 @@ class Agent:
         if message.receiver != self.unique_id and message.receiver != 'agents':
             raise Exception('Wrong receiver!')
 
-        message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED', 'ISSUE_INTEREST']
+        message_subject = ['OPEN_SESSION', 'CLOSE_SESSION', 'OPEN_AUCTION', 'CLOSE_AUCTION', 'OPEN_CONTINUOUS_TRADING', 'STOP_CONTINUOUS_TRADING', 'ORDER_PLACED', 'ORDER_CANCELLED', 'ORDER_INVALIDED', 'ORDER_FILLED', 'ORDER_FINISHED', 'ISSUE_INTEREST', 'ISSUE_DIVIDEND']
 
         if message.subject == 'OPEN_SESSION':
             # receive time and ready to palce order
@@ -90,9 +90,10 @@ class Agent:
             interest_rate = message.content['interest_rate']
             self.cash += round(self.cash * interest_rate, 2)
 
-        elif message_subject == 'ISSUE_DIVIDEND':
-            dividend = self.core.get_stock_size() * message.content['dividend']
-            self.cash += dividend
+        elif message.subject == 'ISSUE_DIVIDEND':
+            for code, number in self.holdings.items():
+                dividend = self.core.get_stock_size() * message.content[code] * number
+                self.cash += round(dividend, 2)
 
         elif message.subject == 'ORDER_MODIFIED':
             pass
@@ -372,7 +373,7 @@ class ScalingAgent(Agent):
         self.range_of_price = range_of_price
         self.group = group # [optimistic, pessimistic, fundamentalist]
         self.time_delta = 0
-        self.v_1 = 2
+        self.v_1 = 10
         self.v_2 = 0.6
         self.beta = 4
         self.alpha_1 = 0.6
@@ -380,7 +381,8 @@ class ScalingAgent(Agent):
         self.alpha_3 = 1
         self.fundamentalist_discount = 0.75
         self.precision = 100
-        self.return_rate_range = 20
+        # self.return_rate_range = 20
+        self.return_rate_range = np.random.randint(10, 100)
         
         if self.group == 'optimistic':
             ScalingAgent.num_opt_noise_agent += 1
@@ -398,7 +400,8 @@ class ScalingAgent(Agent):
 
     def check_group(self):
         market_stats = self.core.get_call_env_state(lookback = self.return_rate_range, from_last = False)
-        current_value = market_stats['value'][-1]
+        current_value = self.core.get_current_value('TSMC')
+        # current_value = self.core.get_current_value_with_noise('TSMC')
         current_price = market_stats['price'][-1]
         d_p = np.diff(market_stats['price']).mean().item()
         return_rate = d_p / current_price
@@ -423,7 +426,7 @@ class ScalingAgent(Agent):
         opinion_prop = (ScalingAgent.num_opt_noise_agent - ScalingAgent.num_pes_noise_agent) / num_noise_agent
         utility = self.alpha_1 * opinion_prop + (self.alpha_2/self.v_1) * return_rate/price
         prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility) / self.precision
-        if np.random.binomial(n = 1, p = prob) == 1:
+        if prob > 1 or np.random.binomial(n = 1, p = prob) == 1:
             return True
         else:
             return False
@@ -433,7 +436,8 @@ class ScalingAgent(Agent):
         opinion_prop = (ScalingAgent.num_opt_noise_agent - ScalingAgent.num_pes_noise_agent) / num_noise_agent
         utility = self.alpha_1 * opinion_prop + (self.alpha_2/self.v_1) * return_rate/price
         prob = self.v_1 * (num_noise_agent / ScalingAgent.num_of_agent) * math.exp(-utility) / self.precision
-        if np.random.binomial(n = 1, p = prob) == 1:
+
+        if prob > 1 or np.random.binomial(n = 1, p = prob) == 1:
             return True
         else:
             return False
@@ -441,7 +445,8 @@ class ScalingAgent(Agent):
     def switch_noist_fundamentalist(self, d_p, price, value):
         original_group = self.group
         risk_free_rate = self.core.get_risk_free_rate()
-        dividends = 0
+        dividends = risk_free_rate * value
+        # dividends = 0
 
         chartist_profit = (dividends + (1 / self.v_2)*d_p) / price - risk_free_rate
         fundamentalist_profit = self.fundamentalist_discount * abs( (value - price) / price)
@@ -451,12 +456,12 @@ class ScalingAgent(Agent):
         if original_group == 'fundamentalist':
             fund_to_opt_prob = self.v_2 * (ScalingAgent.num_opt_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_21) / self.precision
             fund_to_pes_prob = self.v_2 * (ScalingAgent.num_pes_noise_agent / ScalingAgent.num_of_agent) * math.exp(utility_22) / self.precision
-            if fund_to_opt_prob >= fund_to_pes_prob and np.random.binomial(n = 1, p = fund_to_opt_prob) == 1:
+            if fund_to_opt_prob >= fund_to_pes_prob and (fund_to_opt_prob > 1 or np.random.binomial(n = 1, p = fund_to_opt_prob) == 1):
                 self.group = 'optimistic'
                 ScalingAgent.num_fundamentalist_agent -=1
                 ScalingAgent.num_opt_noise_agent += 1
                 
-            elif np.random.binomial(n = 1, p = fund_to_pes_prob) == 1:
+            elif fund_to_pes_prob > 1 or np.random.binomial(n = 1, p = fund_to_pes_prob) == 1:
                 self.group = 'pessimistic'
                 ScalingAgent.num_fundamentalist_agent -=1
                 ScalingAgent.num_pes_noise_agent += 1
@@ -464,14 +469,14 @@ class ScalingAgent(Agent):
 
         elif original_group == 'optimistic':
             opt_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_21) / self.precision
-            if np.random.binomial(n = 1, p = opt_to_fund_prob) == 1:
+            if opt_to_fund_prob > 1 or np.random.binomial(n = 1, p = opt_to_fund_prob) == 1:
                 self.group = 'fundamentalist'
                 ScalingAgent.num_opt_noise_agent -= 1
                 ScalingAgent.num_fundamentalist_agent +=1
 
         elif original_group == 'pessimistic':
             pes_to_fund_prob = self.v_2 * (ScalingAgent.num_fundamentalist_agent / ScalingAgent.num_of_agent) * math.exp(-utility_22) / self.precision
-            if np.random.binomial(n = 1, p = pes_to_fund_prob) == 1:
+            if pes_to_fund_prob > 1 or np.random.binomial(n = 1, p = pes_to_fund_prob) == 1:
                 self.group = 'fundamentalist'
                 ScalingAgent.num_pes_noise_agent -= 1
                 ScalingAgent.num_fundamentalist_agent +=1
@@ -479,25 +484,68 @@ class ScalingAgent(Agent):
     def generate_order(self):
         # which one?
         code = np.random.choice(list(self.holdings.keys()))
+        market_stats = self.core.get_call_env_state(lookback = self.return_rate_range, from_last = False)
+        d_p = np.diff(market_stats['price']).mean().item()
+
         current_price = self.core.get_current_price(code)
         current_value = self.core.get_current_value(code)
+        # bid = market_stats['bid']
+        # ask = market_stats['ask']
 
-        quantity = np.random.randint(1, self.range_of_quantity)
+
+        # current_value = self.core.get_current_value_with_noise(code)
+        last_filled_bid = current_price
+        last_filled_ask = current_price
         tick_size = self.core.get_tick_size(code)
-        bid_price = round(current_price + np.random.randint(0, self.range_of_price) * tick_size , 2)
-        ask_price = round(current_price + np.random.randint(-self.range_of_price, 0) * tick_size , 2)
+        stock_size = self.core.get_stock_size()
 
+        previous_price = market_stats['price'][-2]
+
+        # quantity = np.random.randint(1, self.range_of_quantity)
         if self.group == 'optimistic':
-            self.place_limit_bid_order(code, quantity, bid_price)
+            tick_range = d_p // tick_size
+            premium_ticks =  np.random.randint(-self.range_of_price + tick_range, self.range_of_price + tick_range)
+            bid_price = round(current_price + premium_ticks * tick_size , 1)
+            available_bid_quantity = self.cash // (bid_price * stock_size)
+            bid_quantity = max(round(np.random.random() * self.range_of_quantity * available_bid_quantity), 1)
+            # bid_quantity = np.random.randint(1, 5)
+            self.place_limit_bid_order(code, bid_quantity, bid_price)
 
         elif self.group == 'pessimistic':
-            self.place_limit_ask_order(code, min(quantity, self.holdings[code]), ask_price)
+            tick_range =  d_p // tick_size
+            premium_ticks = np.random.randint(-self.range_of_price + tick_range, self.range_of_price + tick_range) 
+            ask_price = round(current_price + premium_ticks * tick_size , 1)
+            available_ask_quantity = self.holdings[code]
+            ask_quantity = max(round(np.random.random() * self.range_of_quantity * available_ask_quantity),  1)
+            # ask_quantity = np.random.randint(1, 5)
+            self.place_limit_ask_order(code, min(ask_quantity, self.holdings[code]), ask_price)
 
         elif self.group == 'fundamentalist':
-            if current_value > current_price:
-                self.place_limit_bid_order(code, quantity, bid_price)
-            elif current_value < current_price:
-                self.place_limit_ask_order(code, quantity, ask_price)
+            diff = current_value - current_price
+            tick_range = diff // tick_size
+            level = abs(diff / current_value)
+            if diff > 0:
+                premium_ticks = np.random.randint(0, tick_range + self.range_of_price)
+                bid_price = round(current_price + premium_ticks * tick_size , 1)
+                available_bid_quantity = self.cash // (bid_price * stock_size)
+                # bid_quantity = max(round(np.random.random() * self.range_of_quantity * available_bid_quantity), 1)
+                # bid_quantity = np.random.randint(1, 5)
+                bid_quantity = max(round(level * available_bid_quantity), 1)
+                self.place_limit_bid_order(code, bid_quantity, bid_price)
+
+            elif diff < 0:
+                premium_ticks = np.random.randint(-self.range_of_price + tick_range, 0)
+                ask_price = round(current_price + premium_ticks * tick_size , 1)
+                available_ask_quantity = self.holdings[code]
+                # ask_quantity = max(round(np.random.random() * self.range_of_quantity * available_ask_quantity) , 1)
+                # ask_quantity = np.random.randint(1, 5)
+                ask_quantity = max(round(level * available_ask_quantity) , 1)
+                self.place_limit_ask_order(code, ask_quantity, ask_price)
+        if current_price == previous_price:
+            a = 100
+        if current_price - current_value > 3:
+            a = 100
+
     
     @classmethod
     def get_opt_number(cls):

@@ -1,3 +1,5 @@
+import random
+
 from datetime import datetime, timedelta
 from queue import Queue
 from typing import Dict, List
@@ -6,7 +8,7 @@ from numpy.lib.function_base import angle
 # from core import agent
 from .market import Market, CallMarket
 from .agent_manager import AgentManager
-
+from .agent import ScalingAgent
 
 class Core:
     '''
@@ -60,13 +62,11 @@ class Core:
         self.market.start()
         self.agent_manager.start(self.market.get_securities())
 
-        print("Set up the following agents:")
-
         # start to simulate
         for i in range(num_simulation):
             self.timestep = 0
             self.market.open_session()
-            for timestep in range(num_of_timesteps):
+            for _ in range(num_of_timesteps):
                 self.step()
 
         return self.market.orderbooks, self.agent_manager
@@ -79,10 +79,46 @@ class Core:
         self.timestep += 1
 
         if self.show_price:
-            print(
-                f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
-            if self.timestep % 100 == 0:
-                print(f"==========={self.timestep}===========\n")
+            if self.timestep % 1 == 0:
+                print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}")
+
+    def call_run(self, num_simulation=100, num_of_timesteps=100000, random_seed=9527):
+        # time
+        self.start_time = datetime.now()
+        self.random_seed = random_seed
+        # register the core for the market and agents
+        self.market.start()
+        self.agent_manager.start(self.market.get_securities())
+
+        # start to simulate
+        for i in range(num_simulation):
+            self.timestep = 0
+            self.market.open_session()
+            for _ in range(num_of_timesteps):
+                self.call_step()
+
+        return self.market.orderbooks, self.agent_manager
+
+    def call_step(self):
+        self.agent_manager.call_step()
+        self.handle_messages()
+        self.market.step()
+        self.handle_messages()
+        self.timestep += 1
+
+        if self.show_price:
+            if self.timestep % 1 == 0:
+                print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}")
+                h = {'optimistic': 0, 'pessimistic': 0, 'fundamentalist': 0}
+                for agent in self.agent_manager.agents.values():
+                    if agent.group == 'optimistic':
+                        h['optimistic'] += agent.holdings['TSMC']
+                    elif agent.group == 'pessimistic':
+                        h['pessimistic'] += agent.holdings['TSMC']
+                    elif agent.group == 'fundamentalist':
+                        h['fundamentalist'] += agent.holdings['TSMC']
+                print(h)
+                print({'optimistic': ScalingAgent.get_opt_number(), 'pessimistic': ScalingAgent.get_pes_number(), 'fundamentalist': ScalingAgent.get_fud_number()})
 
     def env_start(self, random_seed):
         self.start_time = datetime.now()
@@ -171,16 +207,9 @@ class Core:
         self.handle_message(message)
 
     def handle_messages(self):
-        market_messages = 0
-        agent_messages = 0
         while not self.message_queue.empty():
             message = self.message_queue.get()
             self.handle_message(message)
-            if message.postcode == 'MARKET':
-                market_messages += 1
-            else:
-                agent_messages += 1
-        # print(f'Market messages: {market_messages}, agent messages: {agent_messages}')
 
     def handle_message(self, message):
         if message.postcode == 'MARKET':
@@ -207,6 +236,10 @@ class Core:
     def get_current_value(self, code):
         return self.market.get_current_value(code)
 
+    def get_current_value_with_noise(self, code):
+        return self.market.get_current_value_with_noise(code)
+
+
 
     def get_records(self, code, _type, step=1, from_last = True):
         return self.market.get_records(code, _type, step, from_last)
@@ -217,9 +250,24 @@ class Core:
     def get_best_asks(self, code, number):
         return self.market.get_best_asks(code, number)
 
+    def get_best_bid_price(self, code, number):
+        return self.market.get_best_bid_price(code, number)
+
+    def get_best_ask_price(self, code, number):
+        return self.market.get_best_ask_price(code, number)
+
+    def get_average_bid(self, code):
+        return self.market.get_average_bid(code)
+
+    def get_average_ask(self, code):
+        return self.market.get_average_ask(code)
+
     def get_tick_size(self, code):
         return self.market.get_tick_size(code)
 
+    def get_stock_size(self):
+        return self.market.get_stock_size()
+        
     def get_transaction_rate(self):
         return self.market.get_transaction_rate()
     
@@ -246,10 +294,21 @@ class Core:
             'price': self.get_records(code='TSMC', _type = 'price', step = lookback, from_last = from_last),
             'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback, from_last = from_last),
             'value': self.get_records(code='TSMC', _type = 'value', step = lookback, from_last = from_last),
+            'risk_free_rate': self.get_risk_free_rate(),
+            # 'bid': self.get_average_bid(code = 'TSMC'),
+            # 'ask': self.get_average_ask(code = 'TSMC'),
+        }
+        return state
+
+    def get_continuous_env_state(self, lookback, from_last = True):
+        state = {
+            'close': self.get_records(code='TSMC', _type = 'close', step = lookback, from_last = from_last),
+            'volume': self.get_records(code='TSMC', _type = 'volume', step = lookback, from_last = from_last),
+            'value': self.get_records(code='TSMC', _type = 'value', step = lookback, from_last = from_last),
             'risk_free_rate': self.get_risk_free_rate()
         }
         return state
-    
+
     def get_rl_agent_status(self, agent_id):
         return self.agent_manager.agents[agent_id].action_status
 

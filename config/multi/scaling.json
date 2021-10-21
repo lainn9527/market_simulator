@@ -1,0 +1,74 @@
+{
+    "Core": {
+        "result_name": "multi",
+        "show_price": true
+    },
+    "Market":{
+        "Structure": {
+            "interest_rate": 0.0002,
+            "interest_period": 1,
+            "clear_period": 200,
+            "transaction_rate": 0.002,
+            "order_capacity": 50
+        },
+        "Securities": {
+            "TSMC": {
+                "value": 100,
+                "dividend_ratio": 0.1,
+                "dividend_ar": 0.95,
+                "dividend_var": 0.0743,
+                "dividend_period": 100
+            }
+        }
+    },
+
+    "Agent": {
+        "Global": {
+            "cash": 20000,
+            "alpha": 2,
+            "risk_preference_mean": 0,
+            "risk_preference_var": 1,
+            "securities": {
+                "TSMC": 2
+            }
+        },
+        "ScalingAgent": [
+            {
+                "name": "sc_opt",
+                "type": "optimistic",
+                "number": 200,
+                "range_of_price": 10,
+                "range_of_quantity": 5,
+                "cash": 100000,
+                "securities": {
+                    "TSMC": 10
+                }
+            },
+            {
+                "name": "sc_pes",
+                "type": "pessimistic",
+                "number": 200,
+                "range_of_price": 10,
+                "range_of_quantity": 5,
+                "cash": 100000,
+                "securities": {
+                    "TSMC": 10
+                }
+            },
+            {
+                "name": "sc_fud",
+                "type": "fundamentalist",
+                "number": 200,
+                "range_of_price": 10,
+                "range_of_quantity": 5,
+                "cash": 100000,
+                "securities": {
+                    "TSMC": 10
+                }
+            }
+        ]
+    },
+
+    "Env":{
+    }
+}

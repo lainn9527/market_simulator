@@ -49,58 +49,9 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    config_path = Path("config/herd.json")
+    config_path = Path("config/scaling.json")
     config = json.loads(config_path.read_text())
 
-    experiment_name = 'new_tr_security_cash_propotion'
+    experiment_name = 'scaling'
     result_dir = Path("result") / experiment_name
-    simulate(result_dir / 'stock_numbe2', 4050, config, random_seed=9528)
-    # cashes = [10000, 20000, 20000, 30000]
-    # holdings = [0, 1, 2, 2]
-    # names = ['10000_0', '10000_1', '20000_2', '30000_2']
-    # with Pool(8) as pool:
-    #     for i in range(4):
-    #         tmp_config = deepcopy(config)
-    #         tmp_config['Agent']['Global']['cash'] = cashes[i]
-    #         tmp_config['Agent']['Global']['securities']['TSMC'] = holdings[i]
-    #         pool.apply_async(simulate, (result_dir / f"{names[i]}", 4050, tmp_config, 9527))
-    #     pool.close()
-    #     pool.join()
-
-
-    # config0 = deepcopy(config)
-    # config0['Agent']['DahooAgent'][0]['number'] = 0
-
-    # config1 = deepcopy(config)
-    # config1['Agent']['DahooAgent'][0]['cash'] = 1e7
-    # config2 = deepcopy(config)
-    # config2['Agent']['DahooAgent'][0]['cash'] = 2e7
-    # config3 = deepcopy(config)
-    # config3['Agent']['DahooAgent'][0]['cash'] = 4e7
-    # config4 = deepcopy(config)
-    # config4['Agent']['DahooAgent'][0]['cash'] = 5e7
-    # config5 = deepcopy(config)
-    # config5['Agent']['DahooAgent'][0]['number'] = 2
-    # config5['Agent']['DahooAgent'][0]['cash'] = 1e7
-    # config6 = deepcopy(config)
-    # config6['Agent']['DahooAgent'][0]['number'] = 4
-    # config6['Agent']['DahooAgent'][0]['cash'] = 1e7
-    # config7 = deepcopy(config)
-    # config7['Agent']['DahooAgent'][0]['cash'] = 1e8
-
-    # names = ['base-no_dahoo', '1e7', '2e7', '4e7', '5e7', '2_1e7', '4_1e7', '1e8']
-    # experiments = [
-    #     (result_dir / names[0], 16200, config0,),
-    #     (result_dir / names[1], 16200, config1,),
-    #     (result_dir / names[2], 16200, config2,),
-    #     (result_dir / names[3], 16200, config3,),
-    #     (result_dir / names[4], 16200, config4,),
-    #     (result_dir / names[5], 16200, config5,),
-    #     (result_dir / names[6], 16200, config6,),
-    #     (result_dir / names[7], 16200, config7,)
-    # ]
-    # with Pool(8) as pool:
-    #     for args in experiments:
-    #         pool.apply_async(simulate, args)
-    #     pool.close()
-    #     pool.join()
+    simulate(result_dir, 4050, config, random_seed=9528)

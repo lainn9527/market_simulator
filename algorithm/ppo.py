@@ -6,7 +6,7 @@ from torch import distributions
 from torch.distributions import Categorical
 from torch.optim import Adam
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 class PPO(nn.Module):
     def __init__(self, observation_space, action_space, actor_lr, value_lr, batch_size, buffer_size, device, n_epoch):
         super(PPO, self).__init__()
@@ -27,6 +27,8 @@ class PPO(nn.Module):
                         )
         self.actor_optimizer = Adam(self.action_layer.parameters(), actor_lr)
         self.value_optimizer = Adam(self.value_layer.parameters(), value_lr)
+        self.actor_scheduler = ReduceLROnPlateau(self.actor_optimizer, 'min')
+        self.value_scheduler = ReduceLROnPlateau(self.value_optimizer, 'min')
         self.activation_fn = torch.tanh
         self.buffer = []
         self.buffer_size = buffer_size
@@ -127,7 +129,8 @@ class PPO(nn.Module):
                 nn.utils.clip_grad_norm_(self.value_layer.parameters(), 0.5)
                 self.value_optimizer.step()
 
-
+                self.actor_scheduler.step(policy_loss)
+                self.value_scheduler.step(value_loss)
                 # total loss
                 # loss = policy_loss + self.entropy_coef*entropy_loss + self.value_coef*value_loss 
                 # loss = policy_loss + value_loss 

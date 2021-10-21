@@ -1,5 +1,6 @@
 import random
 import math
+import numpy as np
 from .order_book import OrderBook, CallOrderBook
 from .message import Message
 from .order import LimitOrder, MarketOrder
@@ -19,20 +20,22 @@ class Market:
         pass
 
     def step(self):
+        timestep = self.get_time()
         for orderbook in self.orderbooks.values():
             orderbook.step_summarize()
 
         self.check_volatility()
         self.check_liquidity()
+        self.change_value()
 
-        if self.get_time() % self.clear_period == 0:
-            for orderbook in self.orderbooks.values():
-                orderbook.clear_orders()
+        if timestep > 0:
+            if timestep % self.clear_period == 0:
+                for orderbook in self.orderbooks.values():
+                    orderbook.clear_orders()
 
-        if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
-            self.issue_interest()
-            # adjust value
-
+            if timestep % self.interest_period == 0:
+                self.issue_interest()
+        
         
     def open_session(self):
         # determine the price list of orderbook
@@ -96,10 +99,14 @@ class Market:
 
     def issue_dividends(self):
         for code, orderbook in self.orderbooks.items():
-            previous = list(orderbook.dividend_record.values)[-1] if len(orderbook.dividend_record) > 0 else orderbook.value
-            dividend = orderbook.value + orderbook.dividend_ar * (previous - orderbook.value) + random.gauss(0, orderbook.dividend_var)
-            for order_record in orderbook.current_orders:
-                self.send_message(Message('AGENT', 'ISSUE_DIVIDEND', 'MARKET', order_record.order.orderer, {'code': code, 'dividend': dividend}))
+            current_value = self.get_value(code)
+            dividend = current_value * self.interest_rate
+            self.send_message(Message('ALL_AGENTS', 'ISSUE_DIVIDEND', 'MARKET', 'agents', {code: dividend}))
+
+            # previous = list(orderbook.dividend_record.values)[-1] if len(orderbook.dividend_record) > 0 else orderbook.value
+            # dividend = orderbook.value + orderbook.dividend_ar * (previous - orderbook.value) + random.gauss(0, orderbook.dividend_var)
+            # for order_record in orderbook.current_orders:
+            #     self.send_message(Message('AGENT', 'ISSUE_DIVIDEND', 'MARKET', order_record.order.orderer, {'code': code, 'dividend': dividend}))
             orderbook.dividend_record[self.get_time()] = dividend
         
     def change_value(self, code):
@@ -109,9 +116,6 @@ class Market:
         self.orderbooks[code].adjust_value(current_value)
 
     def random_event(self, code):
-        timestep = self.get_time()
-        if timestep % 10 != 0:
-            return
         v = random.gauss(0, 0.05)
         previous_value = self.get_value(code)
         current_value = round(math.exp(math.log(previous_value) + v), 1)
@@ -154,8 +158,33 @@ class Market:
     def get_best_asks(self, code, number = 1):
         return [{'price': price, 'volume': self.orderbooks[code].asks_volume[price]} for price in self.orderbooks[code].asks_price[:number]]
     
+    def get_best_bid_price(self, code, number = 1):
+        return self.orderbooks[code].bids_price[:number]
+
+    def get_best_ask_price(self, code, number = 1):
+        return self.orderbooks[code].asks_price[:number]
+
+    def get_average_bid(self, code):
+        if len(self.orderbooks[code].bids_price) == 0:
+            return self.get_current_price(code)
+        else:
+            prices = np.array(list(self.orderbooks[code].bids_volume.keys()))
+            volumes = np.array(list(self.orderbooks[code].bids_volume.values()))
+            return round((np.dot(prices, volumes) / volumes.sum()).item(), 1)
+
+    def get_average_ask(self, code):
+        if len(self.orderbooks[code].asks_price) == 0:
+            return self.get_current_price(code)
+        else:
+            prices = np.array(list(self.orderbooks[code].asks_volume.keys()))
+            volumes = np.array(list(self.orderbooks[code].asks_volume.values()))
+            return round((np.dot(prices, volumes) / volumes.sum()).item(), 1)
+
     def get_tick_size(self, code):
         return self.orderbooks[code].tick_size
+
+    def get_stock_size(self):
+        return self.stock_size
 
     def get_transaction_rate(self):
         return self.transaction_rate
@@ -213,6 +242,7 @@ class CallMarket(Market):
 
     def step(self):
         # adjust value
+        timestep = self.get_time()
         for code, orderbook in self.orderbooks.items():
             if len(orderbook.bids_price) == 0 or len(orderbook.asks_price) == 0 or orderbook.bids_price[0] < orderbook.asks_price[0]:
                 updated_info = orderbook.handle_no_match()
@@ -226,11 +256,13 @@ class CallMarket(Market):
             orderbook.clear_orders()
             orderbook.step_summarize()
             self.change_value(code)
-            self.random_event(code)
+            # if timestep > 0 and timestep % 20 == 0:
+                # self.random_event(code)
             
         
-        if self.get_time() % self.interest_period == 0 and self.get_time() != 0:
+        if timestep > 0 and timestep % self.interest_period == 0:
             self.issue_interest()
+            self.issue_dividends()
         
         return done
     
@@ -252,6 +284,19 @@ class CallMarket(Market):
 
     def get_current_value(self, code):
         return self.orderbooks[code].current_record['value']
+
+    def get_current_value_with_noise(self, code):
+        v = random.gauss(0, 0.01)
+        real_value = self.orderbooks[code].current_record['value']
+        step = random.randint(1, 60)
+        values = self.orderbooks[code].steps_record['value'][-1*step::]
+        d_v = np.diff(values).sum().item()
+        
+        # noisy_value = round(math.exp(math.log(real_value) + v), 1)
+        noisy_value = real_value + d_v
+        return noisy_value
+
+        
         
     def get_base_price(self, code):
         return self.orderbooks[code].steps_record['price'][0]
