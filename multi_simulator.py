@@ -17,7 +17,7 @@ from core.core import Core
 from env.multi_env import MultiTradingEnv
 
 Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state', 'done'])
-def train_model(train_config: Dict, env_config: Dict):
+def train_model(train_config: Dict):
     if not train_config['result_dir'].exists():
         train_config['result_dir'].mkdir()
     train_output_dir = train_config['result_dir'] / 'train'
@@ -33,6 +33,8 @@ def train_model(train_config: Dict, env_config: Dict):
     if train_config['resume']:
         resume_config_path = train_config['resume_model_dir'] / 'config.json'
         env_config = json.loads(resume_config_path.read_text())
+    else:
+        env_config = json.loads(train_config['config_path'].read_text())
 
     # init training env
     multi_env = MultiTradingEnv()
@@ -59,11 +61,19 @@ def train_model(train_config: Dict, env_config: Dict):
     n_epochs = train_config['train_epochs']
     train_steps = train_config['train_steps']
     validate_steps = train_config['validate_steps']
+    early_stop_patience = train_config['early_stop_patience']
+    earlt_stop_threshold = train_config['earlt_stop_threshold']
+
+    trained_agent_ids = []
     for t in range(n_epochs):
         print(f"Epoch {t} start")
         agent_ids, states = multi_env.reset(env_config)
-        rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': [], 'policy_loss': [], 'value_loss': []} for agent_id in agent_ids}
+        training_agent_ids = {agent_id: True for agent_id in agent_ids}
+        for trained_agent_id in trained_agent_ids:
+            training_agent_ids[trained_agent_id] = False
+            
 
+        rl_records = {agent_id: {'states': [], 'actions': [], 'rewards': [], 'policy_loss': [], 'value_loss': []} for agent_id in agent_ids}
         for i in range(train_steps):
             # collect actions
             obs, actions, log_probs, rewards = {}, {}, {}, {}
@@ -74,6 +84,8 @@ def train_model(train_config: Dict, env_config: Dict):
             done, rewards, next_states, next_obs = multi_env.step(actions)
 
             for agent_id, agent in zip(agent_ids, agents):
+                if not training_agent_ids[agent_id]:
+                    continue
                 loss = agent.update(Transition(obs[agent_id],actions[agent_id], rewards[agent_id]['weighted_reward'], log_probs[agent_id], next_obs[agent_id], done))
 
                 # log
@@ -82,11 +94,22 @@ def train_model(train_config: Dict, env_config: Dict):
                 rl_records[agent_id]['rewards'].append(rewards[agent_id])
                 
                 if loss != None:
-                    rl_records[agent_id]['policy_loss'] += loss['policy_loss']
-                    rl_records[agent_id]['value_loss'] += loss['value_loss']
+                    rl_records[agent_id]['policy_loss'] += [loss['policy_loss']]
+                    rl_records[agent_id]['value_loss'] += [loss['value_loss']]
+                    # check stop training
+                    if len(rl_records[agent_id]['policy_loss']) >= early_stop_patience:
+                        policy_array = np.array(rl_records[agent_id]['policy_loss'][-early_stop_patience:])
+                        value_array = np.array(rl_records[agent_id]['value_loss'][-early_stop_patience:])
+                        policy_stop = ((( policy_array[:-1] - policy_array[1:] ) / np.abs(policy_array[:-1])) < earlt_stop_threshold).all()
+                        value_stop = ((( value_array[:-1] - value_array[1:] ) / np.abs(value_array[:-1])) < earlt_stop_threshold).all()
+                        if policy_stop and value_stop:
+                            trained_agent_ids.append(agent_id)
+                            training_agent_ids[agent_id] = False
+                            print(f'{agent_id} stop training, remain {len(agent_ids) - len(trained_agent_ids)}')
+
             
             states = next_states
-            if i % 1 == 0:
+            if i % 10 == 0:
                 multi_env.render(i)
             
             if done:
@@ -96,7 +119,7 @@ def train_model(train_config: Dict, env_config: Dict):
         
         for agent_id, agent in zip(agent_ids, agents):
             agent.end_episode()
-
+        
         # log
         orderbooks, agent_manager = multi_env.close()
         training_record = {'eps': t, 'orderbooks': orderbooks, 'agent_manager': agent_manager, 'states': rl_records}
@@ -104,7 +127,7 @@ def train_model(train_config: Dict, env_config: Dict):
         print(f"Training result is stored in {train_output_dir / f'sim_{t}'}")
 
         # store the agents
-        multi_env.store_agents(model_output_dir / f'sim_{t}', env_config)
+        multi_env.store_agents(model_output_dir, env_config)
         
 
         # validate
@@ -145,8 +168,16 @@ def train_model(train_config: Dict, env_config: Dict):
             print(f"Validation result is stored in {validate_output_dir / f'sim_{t}'}")
 
 
+        if len(trained_agent_ids) == len(agent_ids):
+            print('All agents are trained. Stop training.')
+            return
+        else:
+            print(f"{len(trained_agent_ids)} agents have stopped.")
 
-def predict_model(train_config: Dict, env_config: Dict):
+
+
+
+def predict_model(train_config: Dict):
     predict_output_dir = train_config['result_dir'] / 'predict'
 
     random_seed = 9528
@@ -155,7 +186,7 @@ def predict_model(train_config: Dict, env_config: Dict):
 
     if train_config['train']:
         resume_config_path = train_config['result_dir'] / 'config.json'
-        resume_model_dir = train_config['result_dir'] / 'model' / 'sim_0'
+        resume_model_dir = train_config['result_dir'] / 'model'
     elif train_config['resume']:
         resume_config_path = train_config['resume_model_dir'] / 'config.json'
         resume_model_dir = train_config['resume_model_dir']
@@ -182,13 +213,16 @@ def predict_model(train_config: Dict, env_config: Dict):
     print("Start predict...")
     n_epochs = train_config['predict_epochs']
     n_steps = train_config['predict_steps']
-    args_list = [(predict_output_dir / f"sim_{i}", n_steps, agents, multi_env, random_seed+i, ) for i in range(n_epochs)]
+    args_list = [(predict_output_dir / f"sim_{i}", n_steps, agents, multi_env, env_config, random_seed+i, ) for i in range(n_epochs)]
+    # env_config['Agent'].pop('ScalingAgent')
+
+    # predict(predict_output_dir / f"sim_{0}", n_steps, agents, multi_env, env_config, random_seed, )
     with Pool(6) as p:
         p.starmap(predict, args_list)
 
 
 
-def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
+def predict(output_dir: Path, n_steps, agents, multi_env, env_config, random_seed = 9528):
     np.random.seed(random_seed)
     random.seed(random_seed)
 
@@ -211,6 +245,8 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
             rl_records[agent_id]['actions'].append(actions[agent_id])
         
         states = next_states
+        # if i % 10 == 0:
+        #     multi_env.render(i)
 
         if done:
             multi_env.render(i)
@@ -225,28 +261,31 @@ def predict(output_dir: Path, n_steps, agents, multi_env, random_seed = 9528):
     write_multi_records(predict_record, output_dir)    
     print(f"Prediction result is stored in {output_dir}")
 
-
 if __name__=='__main__':
-    experiment_name = 'rule_diffnumber_rl'
-    config_name = 'scaling_1'
+    experiment_name = 'add_rl_in_classic'
+    config_name = 'sc_100'
     model_config = {
         'config_path': Path(f"config/{experiment_name}/{config_name}.json"),
-        'result_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}_wealth_reward/"),
+        'result_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}"),
+        # 'result_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}_bf45/"),
         'resume': False,
-        'resume_model_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}/model/sim_3/"),
+        'resume_model_dir': Path(f"simulation_result/experiment/{experiment_name}/{config_name}_/model"),
+        # 'resume_model_dir': Path(f"model/sc_100_bs4_br8_wealthreward"),
         'train': True,
-        'train_epochs': 4,
-        'train_steps': 2000,
-        'validate': True,
+        'train_epochs': 10,
+        'train_steps': 500,
+        'validate': False,
         'validate_steps': 200,
-        'predict': False,
+        'predict': True,
         'predict_epochs': 6,
-        'predict_steps': 2500,
+        'predict_steps': 500,
         'actor_lr': 1e-3,
         'value_lr': 3e-3,
-        'batch_size': 32,
-        'buffer_size': 45,
+        'batch_size': 4,
+        'buffer_size': 8,
         'n_epoch': 10,
+        'early_stop_patience': 10,
+        'earlt_stop_threshold': 0.05,
         'device': 'cpu',
     }
     # 4:30 h = 270min = 16200s
@@ -255,15 +294,14 @@ if __name__=='__main__':
     
 
     start_time = perf_counter()
-    env_config = json.loads(model_config['config_path'].read_text())
 
     if model_config['train']:
-        train_model(model_config, env_config)
+        train_model(model_config)
     else:
         print('Skip training.')
 
     if model_config['predict']:
-        predict_model(model_config, env_config)
+        predict_model(model_config)
     else:
         print('Skip predicting')
 

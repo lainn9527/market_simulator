@@ -14,16 +14,20 @@ class PPO(nn.Module):
         self.observation_space = observation_space
         self.action_space = action_space
         total_action_size = sum(action_space)
-        hidden_layer_size = 108
+        hidden_layer_size = 32
         self.action_layer = nn.Sequential(
-                              nn.Linear(observation_space, hidden_layer_size),
+                              nn.Linear(observation_space, hidden_layer_size*2),
+                              nn.Tanh(),
+                              nn.Linear(hidden_layer_size*2, hidden_layer_size),
                               nn.Tanh(),
                               nn.Linear(hidden_layer_size, total_action_size),
                           )
         self.value_layer = nn.Sequential(
-                            nn.Linear(observation_space, hidden_layer_size),
-                            nn.Tanh(),
-                            nn.Linear(hidden_layer_size, 1)
+                              nn.Linear(observation_space, hidden_layer_size*2),
+                              nn.Tanh(),
+                              nn.Linear(hidden_layer_size*2, hidden_layer_size),
+                              nn.Tanh(),
+                              nn.Linear(hidden_layer_size, 1),
                         )
         self.actor_optimizer = Adam(self.action_layer.parameters(), actor_lr)
         self.value_optimizer = Adam(self.value_layer.parameters(), value_lr)
@@ -114,7 +118,7 @@ class PPO(nn.Module):
 
                 self.actor_optimizer.zero_grad()
                 policy_loss.backward()
-                nn.utils.clip_grad_norm_(self.action_layer.parameters(), 0.5)
+                # nn.utils.clip_grad_norm_(self.action_layer.parameters(), 0.5)
                 self.actor_optimizer.step()
                 # self.writer.add_scalar('loss/policy_loss', policy_loss, global_step=self.training_step)
 
@@ -150,7 +154,7 @@ class PPO(nn.Module):
 
         # clear data
         del self.buffer[:]
-        loss = {'policy_loss': policy_losses, 'value_loss': value_losses}
+        loss = {'policy_loss': sum(policy_losses), 'value_loss': sum(value_losses)}
         return loss
 
 

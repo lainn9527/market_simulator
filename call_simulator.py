@@ -34,7 +34,7 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    for t in range(5):
+    for t in range(10):
         config_path = Path("config/rule.json")
         config = json.loads(config_path.read_text())
         pre_value = [config['Market']['Securities']['TSMC']['value']]
@@ -49,8 +49,8 @@ if __name__ == '__main__':
         config['Market']['Securities']['TSMC']['price'] = pre_price
         config['Market']['Securities']['TSMC']['volume'] = pre_volume
 
-        experiment_name = 'fund'
+        experiment_name = 'thesis_range5'
         result_dir = Path(f"simulation_result/call/") / experiment_name / f'sim_{t}'
-        simulate(result_dir, 2000, config, random_seed=100)
+        simulate(result_dir, 1000, config, random_seed=100+t)
 
 

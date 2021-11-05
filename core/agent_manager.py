@@ -105,9 +105,9 @@ class AgentManager:
             records[group_name]['group_asks_volume'] = record['group_asks_volume']
         
         # backdoor for number of scaling agent
-        records['sc_opt_125']['number'] = ScalingAgent.get_opt_number()
-        records['sc_pes_125']['number'] = ScalingAgent.get_pes_number()
-        records['sc_fud_250']['number'] = ScalingAgent.get_fud_number()
+        # records['sc_opt_125']['number'] = ScalingAgent.get_opt_number()
+        # records['sc_pes_125']['number'] = ScalingAgent.get_pes_number()
+        # records['sc_fud_250']['number'] = ScalingAgent.get_fud_number()
         
         self.step_records.append(records)
 

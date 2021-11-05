@@ -327,8 +327,7 @@ class RLAgent(Agent):
             self.action_status = RLAgent.INVALID_ACTION
             best_bid = self.core.get_best_bids('TSMC', 1)
             best_bid = current_price if len(best_bid) == 0 else best_bid[0]['price']
-            # price = round(best_bid + (4-ticks) * tick_size, 2)
-            price = round(best_bid + ticks * tick_size, 2)
+            price = round(current_price + ticks * tick_size, 1)
             self.place_limit_bid_order('TSMC', float(volume), float(price))
 
         elif bid_or_ask == 1:
@@ -336,8 +335,7 @@ class RLAgent(Agent):
             self.action_status = RLAgent.INVALID_ACTION
             best_ask = self.core.get_best_asks('TSMC', 1)
             best_ask = current_price if len(best_ask) == 0 else best_ask[0]['price']
-            # price = round(best_ask + (ticks-4) * tick_size, 2)
-            price = round(best_ask - ticks * tick_size, 2)
+            price = round(current_price - ticks * tick_size, 1)
             self.place_limit_ask_order('TSMC', float(volume), float(price))
 
     def receive_message(self, message):
@@ -489,11 +487,11 @@ class ScalingAgent(Agent):
 
         current_price = self.core.get_current_price(code)
         current_value = self.core.get_current_value(code)
+        # current_value = self.core.get_current_value_with_noise(code)
         # bid = market_stats['bid']
         # ask = market_stats['ask']
 
 
-        # current_value = self.core.get_current_value_with_noise(code)
         last_filled_bid = current_price
         last_filled_ask = current_price
         tick_size = self.core.get_tick_size(code)
@@ -525,7 +523,7 @@ class ScalingAgent(Agent):
             tick_range = diff // tick_size
             level = abs(diff / current_value)
             if diff > 0:
-                premium_ticks = np.random.randint(0, tick_range + self.range_of_price)
+                premium_ticks = np.random.randint(-self.range_of_price + tick_range, tick_range + self.range_of_price)
                 bid_price = round(current_price + premium_ticks * tick_size , 1)
                 available_bid_quantity = self.cash // (bid_price * stock_size)
                 # bid_quantity = max(round(np.random.random() * self.range_of_quantity * available_bid_quantity), 1)
@@ -534,13 +532,14 @@ class ScalingAgent(Agent):
                 self.place_limit_bid_order(code, bid_quantity, bid_price)
 
             elif diff < 0:
-                premium_ticks = np.random.randint(-self.range_of_price + tick_range, 0)
+                premium_ticks = np.random.randint(-self.range_of_price + tick_range, self.range_of_price + tick_range)
                 ask_price = round(current_price + premium_ticks * tick_size , 1)
                 available_ask_quantity = self.holdings[code]
                 # ask_quantity = max(round(np.random.random() * self.range_of_quantity * available_ask_quantity) , 1)
                 # ask_quantity = np.random.randint(1, 5)
                 ask_quantity = max(round(level * available_ask_quantity) , 1)
                 self.place_limit_ask_order(code, ask_quantity, ask_price)
+                
         if current_price == previous_price:
             a = 100
         if current_price - current_value > 3:

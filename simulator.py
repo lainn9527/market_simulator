@@ -49,7 +49,7 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    config_path = Path("config/scaling.json")
+    config_path = Path("config/legacy/herd.json")
     config = json.loads(config_path.read_text())
 
     experiment_name = 'scaling'

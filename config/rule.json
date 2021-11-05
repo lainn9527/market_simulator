@@ -26,12 +26,12 @@
 
     "Agent": {
         "Global": {
-            "cash": 1000000,
+            "cash": 2000000,
             "alpha": 2,
             "risk_preference_mean": 0,
             "risk_preference_var": 1,
             "securities": {
-                "TSMC": 100
+                "TSMC": 200
             }
         },
         "ScalingAgent": [
@@ -40,7 +40,7 @@
                 "type": "optimistic",
                 "number": 125,
                 "range_of_price": 5,
-                "range_of_quantity": 0.05
+                "range_of_quantity": 0.1
 
             },
             {
@@ -48,14 +48,14 @@
                 "type": "pessimistic",
                 "number": 125,
                 "range_of_price": 5,
-                "range_of_quantity": 0.05
+                "range_of_quantity": 0.1
             },
             {
                 "name": "sc_fud",
                 "type": "fundamentalist",
                 "number": 250,
                 "range_of_price": 5,
-                "range_of_quantity": 0.05
+                "range_of_quantity": 0.1
             }
         ]
     },
