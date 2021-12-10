@@ -2,7 +2,7 @@ import math
 import numpy as np
 import random
 from numpy.lib.function_base import quantile
-import talib
+# import talib
 from datetime import datetime, timedelta, time
 from typing import DefaultDict, Dict, List
 from collections import defaultdict
@@ -704,164 +704,164 @@ class RandomAgent(Agent):
     def std_of_log_return(self, price_list):
         return np.std(np.diff(np.log(price_list)))
 
-class TrendAgent(Agent):
-    num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id = _id, 
-                         _type = 'tr',
-                         start_cash = start_cash,
-                         start_securities = start_securities,
-                         average_cost = average_cost,
-                         risk_preference = risk_preference)
+# class TrendAgent(Agent):
+#     num_of_agent = 0
+#     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
+#         super().__init__(_id = _id, 
+#                          _type = 'tr',
+#                          start_cash = start_cash,
+#                          start_securities = start_securities,
+#                          average_cost = average_cost,
+#                          risk_preference = risk_preference)
 
-        TrendAgent.add_counter()
-        self.strategy = strategy
-        self.time_window = time_window
-        self.trading_probability = max(0.02 * risk_preference, 0.01)
+#         TrendAgent.add_counter()
+#         self.strategy = strategy
+#         self.time_window = time_window
+#         self.trading_probability = max(0.02 * risk_preference, 0.01)
     
-    def step(self):
-        super().step()
-        if np.random.binomial(n = 1, p = self.trading_probability) == 1:
-            self.generate_order()
+#     def step(self):
+#         super().step()
+#         if np.random.binomial(n = 1, p = self.trading_probability) == 1:
+#             self.generate_order()
 
-    def generate_order(self):
-        code = "TSMC"
-        stock_size = self.core.get_stock_size()
-        tick_size = self.core.get_tick_size(code)
-        current_price = self.core.get_current_price(code)
-        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
+#     def generate_order(self):
+#         code = "TSMC"
+#         stock_size = self.core.get_stock_size()
+#         tick_size = self.core.get_tick_size(code)
+#         current_price = self.core.get_current_price(code)
+#         price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
 
-        if len(price_list) < self.time_window:
-            return
+#         if len(price_list) < self.time_window:
+#             return
         
-        risk_free_amount = (1-self.risk_preference) * self.wealth
-        signal = self.get_signal(price_list)
-        # # add hard limit to sell
-        if self.holdings[code] > 0:
-            profit_ratio = (current_price / self.average_cost)
-            # realize
-            if current_price > self.average_cost:
-                realize_probability = profit_ratio * (1-self.risk_preference)
-                if realize_probability > 1 or np.random.binomial(n = 1, p = realize_probability) == 1:
-                    self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
-            # flog
-            elif profit_ratio < 0.9:
-                # the range of loss is -10% ~ -50%, depend on the risk preference
-                flog_probability = (1 - profit_ratio) * 2 * (1 - self.risk_preference)
-                if flog_probability > 1 or np.random.binomial(n = 1, p = flog_probability) == 1:
-                    self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
+#         risk_free_amount = (1-self.risk_preference) * self.wealth
+#         signal = self.get_signal(price_list)
+#         # # add hard limit to sell
+#         if self.holdings[code] > 0:
+#             profit_ratio = (current_price / self.average_cost)
+#             # realize
+#             if current_price > self.average_cost:
+#                 realize_probability = profit_ratio * (1-self.risk_preference)
+#                 if realize_probability > 1 or np.random.binomial(n = 1, p = realize_probability) == 1:
+#                     self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
+#             # flog
+#             elif profit_ratio < 0.9:
+#                 # the range of loss is -10% ~ -50%, depend on the risk preference
+#                 flog_probability = (1 - profit_ratio) * 2 * (1 - self.risk_preference)
+#                 if flog_probability > 1 or np.random.binomial(n = 1, p = flog_probability) == 1:
+#                     self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
 
-        if signal > 0 and self.cash > risk_free_amount:
-            best_bid = self.core.get_best_bids('TSMC', 1)
-            price = round(current_price + np.random.randint(-5, 1) * tick_size , 2)
-            bid_quantity = round( (self.cash - risk_free_amount) / (stock_size*price))
-            self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
+#         if signal > 0 and self.cash > risk_free_amount:
+#             best_bid = self.core.get_best_bids('TSMC', 1)
+#             price = round(current_price + np.random.randint(-5, 1) * tick_size , 2)
+#             bid_quantity = round( (self.cash - risk_free_amount) / (stock_size*price))
+#             self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
 
-        elif signal < 0 and self.cash < risk_free_amount and self.holdings[code] > 0:
-            best_ask = self.core.get_best_asks('TSMC', 1)
-            price = round(current_price + np.random.randint(-1, 5) * tick_size , 2)
-            ask_quantity = min(round( (risk_free_amount - self.cash) / (stock_size*price)), self.holdings[code])
-            self.place_limit_ask_order(code, quantity = ask_quantity, price = price)
+#         elif signal < 0 and self.cash < risk_free_amount and self.holdings[code] > 0:
+#             best_ask = self.core.get_best_asks('TSMC', 1)
+#             price = round(current_price + np.random.randint(-1, 5) * tick_size , 2)
+#             ask_quantity = min(round( (risk_free_amount - self.cash) / (stock_size*price)), self.holdings[code])
+#             self.place_limit_ask_order(code, quantity = ask_quantity, price = price)
 
-    def get_signal(self, price_list, volumn_list = None):
-        price_list = np.array(price_list, dtype='float64')
-        if self.strategy == 'sma':
-            time_window_short = self.time_window // 2
-            long = talib.SMA(price_list, self.time_window - 3)
-            short = talib.SMA(price_list, time_window_short - 3)
-            return float( (short[-3:] - long[-3:]).mean())
+#     def get_signal(self, price_list, volumn_list = None):
+#         price_list = np.array(price_list, dtype='float64')
+#         if self.strategy == 'sma':
+#             time_window_short = self.time_window // 2
+#             long = talib.SMA(price_list, self.time_window - 3)
+#             short = talib.SMA(price_list, time_window_short - 3)
+#             return float( (short[-3:] - long[-3:]).mean())
 
-        elif self.strategy == 'ema':
-            time_window_short = self.time_window // 2
-            long = talib.EMA(price_list, self.time_window - 3)
-            short = talib.EMA(price_list, time_window_short - 3)
-            return float( (short[-3:] - long[-3:]).mean())
+#         elif self.strategy == 'ema':
+#             time_window_short = self.time_window // 2
+#             long = talib.EMA(price_list, self.time_window - 3)
+#             short = talib.EMA(price_list, time_window_short - 3)
+#             return float( (short[-3:] - long[-3:]).mean())
 
-        elif self.strategy == 'macd':
-            time_window = self.time_window // 2
-            time_window_short = time_window // 2
-            macd, macdsignal, macdhist = talib.MACD(price_list, fastperiod = time_window_short, slowperiod = time_window, signalperiod = time_window_short - 3)
-            return float(macdhist[-3:].mean())
+#         elif self.strategy == 'macd':
+#             time_window = self.time_window // 2
+#             time_window_short = time_window // 2
+#             macd, macdsignal, macdhist = talib.MACD(price_list, fastperiod = time_window_short, slowperiod = time_window, signalperiod = time_window_short - 3)
+#             return float(macdhist[-3:].mean())
 
-class MeanRevertAgent(Agent):
-    num_of_agent = 0
-    def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
-        super().__init__(_id = _id, 
-                         _type = 'mr',
-                         start_cash = start_cash,
-                         start_securities = start_securities,
-                         average_cost = average_cost,
-                         risk_preference = risk_preference)
+# class MeanRevertAgent(Agent):
+#     num_of_agent = 0
+#     def __init__(self, _id, start_cash: int = 1000000, start_securities: Dict[str, int] = None, average_cost = 100, risk_preference = 0.5, strategy = None, time_window = None):
+#         super().__init__(_id = _id, 
+#                          _type = 'mr',
+#                          start_cash = start_cash,
+#                          start_securities = start_securities,
+#                          average_cost = average_cost,
+#                          risk_preference = risk_preference)
 
-        MeanRevertAgent.add_counter()
-        self.strategy = strategy
-        self.time_window = time_window
-        self.trading_probability = max(0.02 * risk_preference, 0.01)
+#         MeanRevertAgent.add_counter()
+#         self.strategy = strategy
+#         self.time_window = time_window
+#         self.trading_probability = max(0.02 * risk_preference, 0.01)
     
-    def step(self):
-        super().step()
-        if np.random.binomial(n = 1, p = self.trading_probability) == 1:
-            self.generate_order()
+#     def step(self):
+#         super().step()
+#         if np.random.binomial(n = 1, p = self.trading_probability) == 1:
+#             self.generate_order()
 
-    def generate_order(self):
-        code = "TSMC"
-        stock_size = self.core.get_stock_size()
-        tick_size = self.core.get_tick_size(code)
-        current_price = self.core.get_current_price(code)
-        price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
+#     def generate_order(self):
+#         code = "TSMC"
+#         stock_size = self.core.get_stock_size()
+#         tick_size = self.core.get_tick_size(code)
+#         current_price = self.core.get_current_price(code)
+#         price_list = self.core.get_records(code = code, _type = 'close', step = self.time_window, from_last = False)
 
-        if len(price_list) < self.time_window:
-            return
-        if self.strategy == 'ema':
-            self.strategy
-        risk_free_amount = (1-self.risk_preference) * self.wealth
-        signal = self.get_signal(price_list)
-        # add hard limit to sell
-        if self.holdings[code] > 0:
-            profit_ratio = (current_price / self.average_cost)
-            # realize
-            if current_price > self.average_cost:
-                realize_probability = profit_ratio * (1-self.risk_preference)
-                if realize_probability > 1 or np.random.binomial(n = 1, p = realize_probability) == 1:
-                    self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
-            # flog
-            elif profit_ratio < 0.9:
-                # the range of loss is -10% ~ -50%, depend on the risk preference
-                flog_probability = (1 - profit_ratio) * 2 * (1 - self.risk_preference)
-                if flog_probability > 1 or np.random.binomial(n = 1, p = flog_probability) == 1:
-                    self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
+#         if len(price_list) < self.time_window:
+#             return
+#         if self.strategy == 'ema':
+#             self.strategy
+#         risk_free_amount = (1-self.risk_preference) * self.wealth
+#         signal = self.get_signal(price_list)
+#         # add hard limit to sell
+#         if self.holdings[code] > 0:
+#             profit_ratio = (current_price / self.average_cost)
+#             # realize
+#             if current_price > self.average_cost:
+#                 realize_probability = profit_ratio * (1-self.risk_preference)
+#                 if realize_probability > 1 or np.random.binomial(n = 1, p = realize_probability) == 1:
+#                     self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
+#             # flog
+#             elif profit_ratio < 0.9:
+#                 # the range of loss is -10% ~ -50%, depend on the risk preference
+#                 flog_probability = (1 - profit_ratio) * 2 * (1 - self.risk_preference)
+#                 if flog_probability > 1 or np.random.binomial(n = 1, p = flog_probability) == 1:
+#                     self.place_limit_ask_order(code, quantity = self.holdings[code], price = current_price)
 
-        if signal < 0 and self.cash > risk_free_amount:
-            best_bid = self.core.get_best_bids('TSMC', 1)
-            price = round(current_price + np.random.randint(-5, 1) * tick_size , 2)
-            bid_quantity = round( (self.cash - risk_free_amount) / (stock_size*price))
-            self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
+#         if signal < 0 and self.cash > risk_free_amount:
+#             best_bid = self.core.get_best_bids('TSMC', 1)
+#             price = round(current_price + np.random.randint(-5, 1) * tick_size , 2)
+#             bid_quantity = round( (self.cash - risk_free_amount) / (stock_size*price))
+#             self.place_limit_bid_order(code, quantity = bid_quantity, price = price)
 
-        elif signal > 0 and self.cash < risk_free_amount and self.holdings[code] > 0:
-            best_ask = self.core.get_best_asks('TSMC', 1)
-            price = round(current_price + np.random.randint(-1, 5) * tick_size , 2)
-            ask_quantity = min(round( (risk_free_amount - self.cash) / (stock_size*price)), self.holdings[code])
-            self.place_limit_ask_order(code, quantity = ask_quantity, price = price)
+#         elif signal > 0 and self.cash < risk_free_amount and self.holdings[code] > 0:
+#             best_ask = self.core.get_best_asks('TSMC', 1)
+#             price = round(current_price + np.random.randint(-1, 5) * tick_size , 2)
+#             ask_quantity = min(round( (risk_free_amount - self.cash) / (stock_size*price)), self.holdings[code])
+#             self.place_limit_ask_order(code, quantity = ask_quantity, price = price)
 
-    def get_signal(self, price_list, volumn_list = None):
-        price_list = np.array(price_list, dtype='float64')
-        if self.strategy == 'sma':
-            time_window_short = self.time_window // 2
-            long = talib.SMA(price_list, self.time_window - 3)
-            short = talib.SMA(price_list, time_window_short - 3)
-            return float( (short[-3:] - long[-3:]).mean())
+#     def get_signal(self, price_list, volumn_list = None):
+#         price_list = np.array(price_list, dtype='float64')
+#         if self.strategy == 'sma':
+#             time_window_short = self.time_window // 2
+#             long = talib.SMA(price_list, self.time_window - 3)
+#             short = talib.SMA(price_list, time_window_short - 3)
+#             return float( (short[-3:] - long[-3:]).mean())
 
-        elif self.strategy == 'ema':
-            time_window_short = self.time_window // 2
-            long = talib.EMA(price_list, self.time_window - 3)
-            short = talib.EMA(price_list, time_window_short - 3)
-            return float( (short[-3:] - long[-3:]).mean())
+#         elif self.strategy == 'ema':
+#             time_window_short = self.time_window // 2
+#             long = talib.EMA(price_list, self.time_window - 3)
+#             short = talib.EMA(price_list, time_window_short - 3)
+#             return float( (short[-3:] - long[-3:]).mean())
 
-        elif self.strategy == 'macd':
-            time_window = self.time_window // 2
-            time_window_short = time_window // 2
-            macd, macdsignal, macdhist = talib.MACD(price_list, fastperiod = time_window_short, slowperiod = time_window, signalperiod = time_window_short - 3)
-            return float(macdhist[-3:].mean())
+#         elif self.strategy == 'macd':
+#             time_window = self.time_window // 2
+#             time_window_short = time_window // 2
+#             macd, macdsignal, macdhist = talib.MACD(price_list, fastperiod = time_window_short, slowperiod = time_window, signalperiod = time_window_short - 3)
+#             return float(macdhist[-3:].mean())
 
 
 class MomentumAgent(Agent):

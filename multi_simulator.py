@@ -177,7 +177,7 @@ def train_model(train_config: Dict):
 
 
 
-def predict_model(train_config: Dict):
+def predict_model(train_config: Dict, n_parallel = 1):
     predict_output_dir = train_config['result_dir'] / 'predict'
 
     random_seed = 9528
@@ -217,7 +217,7 @@ def predict_model(train_config: Dict):
     # env_config['Agent'].pop('ScalingAgent')
 
     # predict(predict_output_dir / f"sim_{0}", n_steps, agents, multi_env, env_config, random_seed, )
-    with Pool(6) as p:
+    with Pool(n_parallel) as p:
         p.starmap(predict, args_list)
 
 

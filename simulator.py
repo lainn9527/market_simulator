@@ -53,5 +53,5 @@ if __name__ == '__main__':
     config = json.loads(config_path.read_text())
 
     experiment_name = 'scaling'
-    result_dir = Path("result") / experiment_name
+    result_dir = Path("simulation_result") / experiment_name
     simulate(result_dir, 4050, config, random_seed=9528)

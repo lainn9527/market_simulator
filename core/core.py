@@ -24,7 +24,6 @@ class Core:
         self,
         config: Dict,
         market_type: str = "continuous",
-        agents_type: str = "normal"
     ) -> None:
 
         # initialize all things
@@ -143,29 +142,6 @@ class Core:
     def env_close(self):
         return self.market.orderbooks, self.agent_manager
 
-    def parallel_env_start(self, random_seed, group_name):
-        self.start_time = datetime.now()
-        self.random_seed = random_seed
-        self.market.start()
-        self.agent_manager.start(self.market.get_securities())
-        pr_agent_ids = list(self.agent_manager.agents.keys())
-        self.timestep = 0
-        self.market.open_session()
-
-        return pr_agent_ids
-
-
-    def parallel_env_step(self, actions):
-        self.agent_manager.multi_env_step(actions)
-        self.handle_messages()
-        self.market.step()
-        self.timestep += 1
-        # print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}\n")
-        # if self.timestep % 100 == 0:
-        #     print(f"==========={self.timestep}===========\n")
-
-    def parallel_env_close(self):
-        return self.market.orderbooks, self.agent_manager
 
     def multi_env_start(self, random_seed, group_name):
         self.start_time = datetime.now()

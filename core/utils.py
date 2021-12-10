@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from pathlib import Path
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict
 from collections import defaultdict
 
@@ -21,14 +21,13 @@ class TransactionRecord:
 class OrderRecord:
     order: Order
     placed_time: int
-    finished_time: int
-    transactions: List[TransactionRecord]
-    filled_quantity: int
-    filled_amount: float
-    transaction_cost: float
-    cancellation: bool
+    finished_time: int = 0
+    filled_quantity: int = 0
+    filled_amount: float = 0
+    transaction_cost: float = 0
+    transactions: List[int] = field(default_factory = list)
+    cancellation: bool = False
 
-        
 
 def write_records(orderbooks: Dict, agent_manager: AgentManager, output_dir: Path):
     if not output_dir.exists():

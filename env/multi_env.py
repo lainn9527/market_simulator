@@ -24,16 +24,15 @@ class MultiTradingEnv:
     def reset(self, config):
         config = deepcopy(config)
         group_name = list(self.group_agents.keys())
-        pre_step = config['Market']['Structure']['prestep']
-        pre_value = [config['Market']['Securities']['TSMC']['value']]
+        n_step = config['Market']['Structure']['prestep']
+        init_value = config['Market']['Securities']['TSMC']['value']
+        pre_prices, pre_values, pre_volumes = self.get_random_states(n_step, init_value)
         pre_price = [config['Market']['Securities']['TSMC']['value']]
-        pre_volume = [int(random.gauss(100, 10)*10) for i in range(pre_step)]
-        for i in range(pre_step):
+        pre_volume = [int(random.gauss(100, 10)*10) for _ in range(pre_step)]
+        for _ in range(pre_step):
             pre_price.append(round(math.exp(math.log(pre_price[-1]) + random.gauss(0, 0.005)), 1))
             pre_value.append(round(math.exp(math.log(pre_value[-1]) + random.gauss(0, 0.005)), 1))
         
-        # pre_price.reverse()
-        # pre_value.reverse()
         config['Market']['Securities']['TSMC']['value'] = pre_value
         config['Market']['Securities']['TSMC']['price'] = pre_price
         config['Market']['Securities']['TSMC']['volume'] = pre_volume
@@ -44,6 +43,17 @@ class MultiTradingEnv:
         init_states = self.get_states() 
 
         return agent_ids, init_states
+
+    def get_random_states(self, n_step, init_value):
+        prices = [init_value]
+        values = [init_value]
+        for _ in range(n_step):
+            prices.append(round(math.exp(math.log(prices[-1]) + random.gauss(0, 0.005)), 1))
+            values.append(round(math.exp(math.log(values[-1]) + random.gauss(0, 0.005)), 1))
+
+        volumes = [int(random.gauss(100, 10)*10) for _ in range(n_step)]
+
+        return prices, values, volumes
 
     def step(self, actions):
         done = self.core.multi_env_step(actions)

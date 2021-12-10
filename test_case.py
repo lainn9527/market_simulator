@@ -122,20 +122,17 @@ class TestCase:
         transaction = TransactionRecord(0, filled_price, filled_quantity)
         bid_order_record = OrderRecord(order = bid_order,
                                        placed_time = 0,
-                                       finished_time = 0,
                                        transactions = [transaction],
                                        filled_quantity = filled_quantity,
                                        filled_amount = filled_amount,
-                                       cancellation = False,
                                        transaction_cost=filled_amount*transaction_rate)
+
         ask_order = tsmc.orders[ask_order_id]
         ask_order_record = OrderRecord(order = ask_order,
                                        placed_time = 0,
-                                       finished_time = None,
                                        transactions = [transaction],
                                        filled_quantity = filled_quantity,
                                        filled_amount = filled_amount,
-                                       cancellation = False,
                                        transaction_cost=filled_amount*transaction_rate)
 
         assert tsmc.bids_price == []

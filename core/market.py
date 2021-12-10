@@ -16,17 +16,12 @@ class Market:
         self.transaction_rate = transaction_rate
         self.orderbooks = {code: OrderBook(self, code, **value) for code, value in securities.items()}
     
-    def start(self):
-        pass
-
     def step(self):
         timestep = self.get_time()
         for orderbook in self.orderbooks.values():
             orderbook.step_summarize()
 
-        self.check_volatility()
-        self.check_liquidity()
-        self.change_value()
+        # self.change_value()
 
         if timestep > 0:
             if timestep % self.clear_period == 0:
