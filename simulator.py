@@ -12,23 +12,6 @@ from multiprocessing import Pool, Process
 from core.core import Core
 from core.utils import write_records
 
-def parse_args(config):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--result_name", type=str, default=config['Core']['result_name'])
-    parser.add_argument("--timestep", type=int, default = config['Core']['timestep'])
-    parser.add_argument("--num_zi", type=int, default=config['Agent']['ZeroIntelligenceAgent'][0]['number'])
-    parser.add_argument("--num_dh", type=int, default=config['Agent']['DahooAgent'][0]['number'])
-    parser.add_argument("--cash_dh", type=int, default=config['Agent']['DahooAgent'][0]['cash'])
-    parser.add_argument("--show_price", action = 'store_true', default = False)
-    args = parser.parse_args()
-
-    config['Agent']['ZeroIntelligenceAgent'][0]['number'] = args.num_zi
-    # print(config['Agent']['ZeroIntelligenceAgent'][0]['number'])
-    config['Agent']['DahooAgent'][0]['number'] = args.num_dh
-    config['Agent']['DahooAgent'][0]['cash'] = args.cash_dh
-    config['Core']['timestep'] = args.timestep
-    config['Core']['show_price'] = args.show_price
-    return args
 
 def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     # args = parse_args(config)
@@ -49,9 +32,8 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    config_path = Path("config/legacy/herd.json")
+    config_path = Path("config/rule.json")
     config = json.loads(config_path.read_text())
-
-    experiment_name = 'scaling'
+    experiment_name = 'thesis_range5'
     result_dir = Path("simulation_result") / experiment_name
     simulate(result_dir, 4050, config, random_seed=9528)

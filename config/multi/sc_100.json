@@ -3,15 +3,15 @@
         "result_name": "multi",
         "show_price": true
     },
-    "Market":{
+    "Market": {
         "Structure": {
+            "market_type": "call",
             "interest_rate": 0.0004,
             "interest_period": 1,
             "clear_period": 200,
             "transaction_rate": 0.002,
             "prestep": 100,
             "order_capacity": 200
-            
         },
         "Securities": {
             "TSMC": {
@@ -23,7 +23,6 @@
             }
         }
     },
-
     "Agent": {
         "Global": {
             "cash": 1000000,
@@ -39,23 +38,22 @@
                 "name": "sc_opt",
                 "type": "optimistic",
                 "number": 125,
-                "range_of_price": 5,
-                "range_of_quantity": 0.05
-
+                "range_of_price": 10,
+                "range_of_quantity": 0.1
             },
             {
                 "name": "sc_pes",
                 "type": "pessimistic",
                 "number": 125,
-                "range_of_price": 5,
-                "range_of_quantity": 0.05
+                "range_of_price": 10,
+                "range_of_quantity": 0.1
             },
             {
                 "name": "sc_fud",
                 "type": "fundamentalist",
                 "number": 250,
-                "range_of_price": 5,
-                "range_of_quantity": 0.05
+                "range_of_price": 10,
+                "range_of_quantity": 0.1
             }
         ],
         "RLAgent": [
@@ -63,11 +61,11 @@
                 "name": "ppo_sc",
                 "type": "scale",
                 "algorithm": "ppo",
-                "number": 250
+                "number": 100,
+                "min_look_back": 2,
+                "max_look_back": 100
             }
         ]
     },
-
-    "Env":{
-    }
+    "Env": {}
 }

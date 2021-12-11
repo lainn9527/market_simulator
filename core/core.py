@@ -7,8 +7,8 @@ from numpy.lib.function_base import angle
 
 # from core import agent
 from .market import Market, CallMarket
-from .agent_manager import AgentManager
-from .agent import ScalingAgent
+from agent.agent_manager import AgentManager
+from agent.agent import ScalingAgent
 
 class Core:
     '''
@@ -36,7 +36,7 @@ class Core:
         self.agent_manager = AgentManager(self, config['Agent'])
 
 
-        if market_type == "continuous":
+        if config['Market']['Structure']['market_type'] == "continuous":
             self.market = Market(self,
                                  interest_rate=config['Market']['Structure']['interest_rate'],
                                  interest_period=config['Market']['Structure']['interest_period'],
@@ -44,12 +44,13 @@ class Core:
                                  transaction_rate=config['Market']['Structure']['transaction_rate'],
                                  securities=config['Market']['Securities'])
         
-        elif market_type == "call":
+        elif config['Market']['Structure']['market_type'] == "call":
             self.market = CallMarket(self,
                                      interest_rate=config['Market']['Structure']['interest_rate'],
                                      interest_period=config['Market']['Structure']['interest_period'],
                                      clear_period=config['Market']['Structure']['clear_period'],
                                      transaction_rate=config['Market']['Structure']['transaction_rate'],
+                                     pre_step=config['Market']['Structure']['prestep'],
                                      securities=config['Market']['Securities'])
 
 
@@ -58,7 +59,6 @@ class Core:
         self.start_time = datetime.now()
         self.random_seed = random_seed
         # register the core for the market and agents
-        self.market.start()
         self.agent_manager.start(self.market.get_securities())
 
         # start to simulate
@@ -86,7 +86,6 @@ class Core:
         self.start_time = datetime.now()
         self.random_seed = random_seed
         # register the core for the market and agents
-        self.market.start()
         self.agent_manager.start(self.market.get_securities())
 
         # start to simulate
@@ -108,21 +107,10 @@ class Core:
         if self.show_price:
             if self.timestep % 1 == 0:
                 print(f"At: {self.timestep}, the market state is:\n{self.market.market_stats()}")
-                h = {'optimistic': 0, 'pessimistic': 0, 'fundamentalist': 0}
-                for agent in self.agent_manager.agents.values():
-                    if agent.group == 'optimistic':
-                        h['optimistic'] += agent.holdings['TSMC']
-                    elif agent.group == 'pessimistic':
-                        h['pessimistic'] += agent.holdings['TSMC']
-                    elif agent.group == 'fundamentalist':
-                        h['fundamentalist'] += agent.holdings['TSMC']
-                print(h)
-                print({'optimistic': ScalingAgent.get_opt_number(), 'pessimistic': ScalingAgent.get_pes_number(), 'fundamentalist': ScalingAgent.get_fud_number()})
 
     def env_start(self, random_seed):
         self.start_time = datetime.now()
         self.random_seed = random_seed
-        self.market.start()
         self.agent_manager.start(self.market.get_securities())
 
         self.timestep = 0
@@ -146,7 +134,6 @@ class Core:
     def multi_env_start(self, random_seed, group_name):
         self.start_time = datetime.now()
         self.random_seed = random_seed
-        self.market.start()
         self.agent_manager.start(self.market.get_securities())
         
         agent_ids = []

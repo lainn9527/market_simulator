@@ -225,7 +225,7 @@ class Market:
             return 5
 
 class CallMarket(Market):
-    def __init__(self, core, interest_rate, interest_period, securities, clear_period, transaction_rate):
+    def __init__(self, core, interest_rate, interest_period, securities, clear_period, transaction_rate, pre_step):
         self.core = core
         self.is_trading = False
         self.stock_size = 100
@@ -233,7 +233,28 @@ class CallMarket(Market):
         self.interest_period = interest_period
         self.clear_period = clear_period
         self.transaction_rate = transaction_rate
-        self.orderbooks = {code: CallOrderBook(self, code, **value) for code, value in securities.items()}
+        self.orderbooks = self.set_orderbooks(securities, pre_step)
+
+    def set_orderbooks(self, securities, pre_step):
+        orderbooks = {}
+        for code, paras in securities.items():
+            orderbooks[code] = CallOrderBook(self, code, **paras)
+            init_value = orderbooks[code].value
+
+            prices = [init_value]
+            values = [init_value]
+            for _ in range(pre_step):
+                prices.append(round(math.exp(math.log(prices[-1]) + random.gauss(0, 0.005)), 1))
+                values.append(round(math.exp(math.log(values[-1]) + random.gauss(0, 0.005)), 1))
+
+            volumes = [int(random.gauss(100, 10)*10) for _ in range(pre_step)]
+
+            orderbooks[code].steps_record["price"] = prices
+            orderbooks[code].steps_record["volume"] = volumes
+            orderbooks[code].steps_record["amount"] = [price * volume for price, volume in zip(prices, volumes)]
+            orderbooks[code].steps_record["value"] = values
+        
+        return orderbooks
 
     def step(self):
         # adjust value

@@ -6,8 +6,8 @@ import json
 
 from copy import deepcopy
 from core.core import Core
-from .rl_agent import TrendAgent, ValueAgent, ScalingAgent
-from core import agent
+from agent import agent
+from agent.rl_agent import TrendAgent, ValueAgent, ScalingAgent
 
 class MultiTradingEnv:
 
@@ -24,18 +24,6 @@ class MultiTradingEnv:
     def reset(self, config):
         config = deepcopy(config)
         group_name = list(self.group_agents.keys())
-        n_step = config['Market']['Structure']['prestep']
-        init_value = config['Market']['Securities']['TSMC']['value']
-        pre_prices, pre_values, pre_volumes = self.get_random_states(n_step, init_value)
-        pre_price = [config['Market']['Securities']['TSMC']['value']]
-        pre_volume = [int(random.gauss(100, 10)*10) for _ in range(pre_step)]
-        for _ in range(pre_step):
-            pre_price.append(round(math.exp(math.log(pre_price[-1]) + random.gauss(0, 0.005)), 1))
-            pre_value.append(round(math.exp(math.log(pre_value[-1]) + random.gauss(0, 0.005)), 1))
-        
-        config['Market']['Securities']['TSMC']['value'] = pre_value
-        config['Market']['Securities']['TSMC']['price'] = pre_price
-        config['Market']['Securities']['TSMC']['volume'] = pre_volume
 
         self.core = Core(config, market_type="call")
         agent_ids = self.core.multi_env_start(987, group_name)

@@ -5,11 +5,14 @@
     },
     "Market":{
         "Structure": {
-            "interest_rate": 0.0002,
+            "market_type": "call",
+            "interest_rate": 0.0004,
             "interest_period": 1,
             "clear_period": 200,
             "transaction_rate": 0.002,
-            "order_capacity": 50
+            "prestep": 100,
+            "order_capacity": 200
+            
         },
         "Securities": {
             "TSMC": {
@@ -24,47 +27,36 @@
 
     "Agent": {
         "Global": {
-            "cash": 20000,
+            "cash": 2000000,
             "alpha": 2,
             "risk_preference_mean": 0,
             "risk_preference_var": 1,
             "securities": {
-                "TSMC": 2
+                "TSMC": 200
             }
         },
         "ScalingAgent": [
             {
                 "name": "sc_opt",
                 "type": "optimistic",
-                "number": 200,
-                "range_of_price": 10,
-                "range_of_quantity": 5,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                }
+                "number": 125,
+                "range_of_price": 5,
+                "range_of_quantity": 0.1
+
             },
             {
                 "name": "sc_pes",
                 "type": "pessimistic",
-                "number": 200,
-                "range_of_price": 10,
-                "range_of_quantity": 5,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                }
+                "number": 125,
+                "range_of_price": 5,
+                "range_of_quantity": 0.1
             },
             {
                 "name": "sc_fud",
                 "type": "fundamentalist",
-                "number": 200,
-                "range_of_price": 10,
-                "range_of_quantity": 5,
-                "cash": 100000,
-                "securities": {
-                    "TSMC": 10
-                }
+                "number": 250,
+                "range_of_price": 5,
+                "range_of_quantity": 0.1
             }
         ]
     },

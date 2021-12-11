@@ -287,45 +287,7 @@ class OrderBook:
         self.asks_volume[price] += quantity
         self.asks_sum += quantity
 
-    def handle_market_order(self, order, time):
-        time = self.market.get_time()
 
-        # assume there is no liquidity issue
-        # add the limit order in the best price in the market
-
-        price = self.stats['up_limit'] if order.bid_or_ask == 'BID' else self.stats['low_limit']
-        transaction_quantity, transaction_amount = self.match_order(order.bid_or_ask, price, order.quantity)
-        transaction_price = round(transaction_amount / transaction_quantity, 2)
-        if transaction_quantity != order.quantity:
-            raise Exception("Liquidity error: The market order isn't finished.")
-
-        order_id = self._generate_order_id()
-        limit_order = LimitOrder.from_market_order(order, transaction_price)
-        limit_order.order_id = order_id
-
-        self.orders[order_id] = {
-            'order': limit_order,
-            'time': time,
-            'state': True,
-            'transactions': [[time, transaction_price, transaction_quantity]],
-            'modifications': [],
-            'cancellation': False
-        }
-
-        self.market.send_message(
-            Message('AGENT', 'ORDER_PLACED', 'market', order.orderer, {'order': limit_order, 'time': time}),
-            time
-        )
-
-        self.market.send_message(
-            Message('AGENT', 'ORDER_FILLED', 'market', order.orderer, {'code': code, 'order_id': order_id, 'price': transaction_price, 'quantity': transaction_quantity}),
-            time
-        )
-
-        self.market.send_message(
-            Message('AGENT', 'ORDER_FINISHED', 'market', order.orderer, {'code': code, 'order_id': order_id, 'time': time}),
-            time
-        )
 
     def fill_order(self, order_id, price, quantity):
         # we don't update stats here, since one transection will be executed by two orders
@@ -509,15 +471,8 @@ class OrderBook:
 
 
 class CallOrderBook(OrderBook):
-    def __init__(self, market, code, dividend_ratio, dividend_ar, dividend_var, dividend_period, price, volume, value):
+    def __init__(self, market, code, dividend_ratio, dividend_ar, dividend_var, dividend_period, value):
         super().__init__(market, code, value, dividend_ratio, dividend_ar, dividend_var, dividend_period)
-        self.set_pre_info(price, value, volume)
-
-    def set_pre_info(self, prices, values, volumes):
-        self.steps_record["price"] = prices
-        self.steps_record["volume"] = volumes
-        self.steps_record["amount"] = [price * volume for price, volume in zip(prices, volumes)]
-        self.steps_record["value"] = values
 
     def set_price(self):
         self.tick_size = self.market.determine_tick_size(self.steps_record["price"][-1])

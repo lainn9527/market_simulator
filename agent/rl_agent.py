@@ -7,7 +7,7 @@ from torch.functional import norm
 
 from algorithm.actor_critic import ActorCritic
 from algorithm.ppo import PPO
-from core import agent
+from . import agent
 
 class BaseAgent:
     '''

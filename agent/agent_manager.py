@@ -1,9 +1,9 @@
 import random
 from typing import Dict, List
 from collections import defaultdict
-from core import agent
-from core.agent import ScalingAgent
 from queue import Queue
+
+from . import agent
 
 class AgentManager:
     def __init__(self, core, config: Dict):

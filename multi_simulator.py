@@ -13,8 +13,7 @@ from collections import namedtuple
 from multiprocessing import Pool
 
 from core.utils import write_multi_records
-from core.core import Core
-from env.multi_env import MultiTradingEnv
+from core.multi_env import MultiTradingEnv
 
 Transition = namedtuple('Transition',['state', 'action', 'reward', 'log_prob', 'next_state', 'done'])
 def train_model(train_config: Dict):
@@ -262,7 +261,7 @@ def predict(output_dir: Path, n_steps, agents, multi_env, env_config, random_see
     print(f"Prediction result is stored in {output_dir}")
 
 if __name__=='__main__':
-    experiment_name = 'add_rl_in_classic'
+    experiment_name = 'multi'
     config_name = 'sc_100'
     model_config = {
         'config_path': Path(f"config/{experiment_name}/{config_name}.json"),

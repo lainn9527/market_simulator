@@ -7,8 +7,8 @@ from collections import defaultdict
 
 from numpy.lib.function_base import place
 
+from agent.agent_manager import AgentManager
 from .order import Order
-from .agent_manager import AgentManager
 
 @dataclass
 class TransactionRecord:
