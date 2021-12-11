@@ -38,7 +38,7 @@
         "ScalingAgent": [
             {
                 "name": "sc_opt",
-                "type": "optimistic",
+                "group_type": "optimistic",
                 "number": 125,
                 "range_of_price": 5,
                 "range_of_quantity": 0.1
@@ -46,14 +46,14 @@
             },
             {
                 "name": "sc_pes",
-                "type": "pessimistic",
+                "group_type": "pessimistic",
                 "number": 125,
                 "range_of_price": 5,
                 "range_of_quantity": 0.1
             },
             {
                 "name": "sc_fud",
-                "type": "fundamentalist",
+                "group_type": "fundamentalist",
                 "number": 250,
                 "range_of_price": 5,
                 "range_of_quantity": 0.1

@@ -32,7 +32,7 @@ def simulate(result_dir: Path, timestep, config, random_seed = 9527):
     
 
 if __name__ == '__main__':
-    config_path = Path("config/rule.json")
+    config_path = Path("config/multi/sc_100.json")
     config = json.loads(config_path.read_text())
     experiment_name = 'thesis_range5'
     result_dir = Path("simulation_result") / experiment_name
